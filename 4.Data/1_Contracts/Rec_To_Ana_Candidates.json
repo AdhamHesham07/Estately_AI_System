@@ -1,0 +1,114 @@
+{
+  "candidates": [
+    {
+      "listing_id": "QWD7M9M49AQ1TM8694FS5Y3MRW",
+      "price_egp": 110000.0,
+      "area_value": 190.0,
+      "price_sqft": 578.9473684180056,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": 0.5219964385032654
+    },
+    {
+      "listing_id": "4AYJWKDDPAQKZ9TMPWTMH7P2VW",
+      "price_egp": 110000.0,
+      "area_value": 220.0,
+      "price_sqft": 499.9999999977273,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": 0.43982309103012085
+    },
+    {
+      "listing_id": "WAFJE0XD4WRNVRWCBE0FB7F5H4",
+      "price_egp": 94000.0,
+      "area_value": 125.0,
+      "price_sqft": 751.999999993984,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 2,
+      "relevance_score": 0.18867497146129608
+    },
+    {
+      "listing_id": "6SH7EX9E7W0D957TWZ8W1CQY2R",
+      "price_egp": 80000.0,
+      "area_value": 268.0,
+      "price_sqft": 298.50746268545333,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": 0.06543757021427155
+    },
+    {
+      "listing_id": "W2K9K9CM8QPZWK2WP9EHDV2K20",
+      "price_egp": 90000.0,
+      "area_value": 190.0,
+      "price_sqft": 473.68421052382274,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": 0.04705560579895973
+    },
+    {
+      "listing_id": "1Q0EZC1H0XK1GBJM2AV1ZRPRTC",
+      "price_egp": 118000.0,
+      "area_value": 191.0,
+      "price_sqft": 617.8010471171843,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": 0.027570579200983047
+    },
+    {
+      "listing_id": "42GQX5FCJF7SJTY5ZAZD4HR6GM",
+      "price_egp": 80000.0,
+      "area_value": 180.0,
+      "price_sqft": 444.44444444197535,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": -0.05853442847728729
+    },
+    {
+      "listing_id": "PH4MJH7FM7YA1BJNTKS9NE9ZA4",
+      "price_egp": 100000.0,
+      "area_value": 200.0,
+      "price_sqft": 499.9999999975,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": -0.08006494492292404
+    },
+    {
+      "listing_id": "ZNTZSKGQKXFZRDZ9DN67E9H1MR",
+      "price_egp": 100000.0,
+      "area_value": 191.0,
+      "price_sqft": 523.5602094213426,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": -0.0873742401599884
+    },
+    {
+      "listing_id": "6BVGQKJ1H86QP6TR8Z2R4HW548",
+      "price_egp": 85000.0,
+      "area_value": 220.0,
+      "price_sqft": 386.3636363618802,
+      "town": "New Cairo City",
+      "completion_status": "completed",
+      "payment_method": "cash",
+      "bedrooms": 3,
+      "relevance_score": -0.22686250507831573
+    }
+  ]
+}

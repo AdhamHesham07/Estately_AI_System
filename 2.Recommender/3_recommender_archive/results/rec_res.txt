@@ -1,0 +1,179 @@
+Price Deviation (~21%): On average, the model finds properties within ~20% of the user's budget
+Type Matching (~60%): The model correctly matches specific property types (e.g., Apartment to Apartment) but also intelligently "flexes" into similar categories (e.g., suggesting a Townhouse for a Villa) to ensure the user always has high-vibe alternatives.
+
+ - --- Evaluation Summary ---
+Average Price Bound Error: 18.01%
+Strict Type Match: 78.65%
+Flexible Type Match (Similarity): 90.17%
+
+--- Pipeline Evaluation (Hybrid) ---
+Mean Price Deviation: 24.23%
+Strict Type Accuracy: 89.41%
+Mean Reciprocal Rank (MRR): 0.9457
+
+[0]     validation_0-ndcg@32:0.98506
+[10]    validation_0-ndcg@32:0.98999
+[20]    validation_0-ndcg@32:0.99180
+[30]    validation_0-ndcg@32:0.99184
+[40]    validation_0-ndcg@32:0.99343
+[50]    validation_0-ndcg@32:0.99390
+[60]    validation_0-ndcg@32:0.99454
+[70]    validation_0-ndcg@32:0.99534
+[80]    validation_0-ndcg@32:0.99535
+[90]    validation_0-ndcg@32:0.99569
+[100]   validation_0-ndcg@32:0.99571
+[110]   validation_0-ndcg@32:0.99604
+[120]   validation_0-ndcg@32:0.99678
+[130]   validation_0-ndcg@32:0.99724
+[140]   validation_0-ndcg@32:0.99752
+[150]   validation_0-ndcg@32:0.99761
+[160]   validation_0-ndcg@32:0.99779
+[170]   validation_0-ndcg@32:0.99780
+[180]   validation_0-ndcg@32:0.99785
+[190]   validation_0-ndcg@32:0.99787
+[200]   validation_0-ndcg@32:0.99781
+[210]   validation_0-ndcg@32:0.99782
+[218]   validation_0-ndcg@32:0.99784
+Best Iteration: 198
+ Feature Importances: {'price_prox': np.float32(0.7798362), 'geo_log': np.float32(0.09897014), 'semantic_sim': np.float32(0.01676721), 'type_sim': np.float32(0.0421484), 'amenity_jaccard': np.float32(0.04311951), 'desc_log_diff': np.float32(0.0076010944), 'beds_diff': np.float32(0.0076468936), 'baths_diff': np.float32(0.003910607)}
+ Step 4: nDCG Evaluation...
+nDCG@10 (Diverse): 0.9995
+
+
+
+
+
+
+
+
+
+2026-04-20 00:19:38,300 - INFO - Step 1: Ingesting & De-duplicating Data (Honest Foundation)...
+2026-04-20 00:19:39,599 - INFO - Dropped 1399 duplicate/leaked rows.
+2026-04-20 00:19:40,130 - INFO - Split Summary: Train Districts=438, Test Districts=78
+2026-04-20 00:19:40,132 - INFO - No device provided, using cpu
+2026-04-20 00:19:41,018 - INFO - Loading SentenceTransformer model from sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2.
+Batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████| 1028/1028 [19:48<00:00,  1.16s/it]
+Batches: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 73/73 [01:24<00:00,  1.16s/it]
+2026-04-20 00:40:58,438 - INFO - Checkpoint saved: v8_3_stage1_data.joblib
+2026-04-20 00:40:59,928 - INFO - Step 2: Building LTR Training Dataset (Honest Reality)...
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1000/1000 [00:43<00:00, 22.97it/s]
+2026-04-20 00:41:43,596 - INFO - Checkpoint saved: v8_3_stage3_vectors.joblib
+2026-04-20 00:41:43,596 - INFO - Step 3: Training Honest XGBRanker...
+[0]     validation_0-ndcg@32:0.96546
+[10]    validation_0-ndcg@32:0.97924
+[20]    validation_0-ndcg@32:0.98193
+[30]    validation_0-ndcg@32:0.98293
+[40]    validation_0-ndcg@32:0.98364
+[50]    validation_0-ndcg@32:0.98483
+[60]    validation_0-ndcg@32:0.98604
+[70]    validation_0-ndcg@32:0.98718
+[80]    validation_0-ndcg@32:0.98792
+[90]    validation_0-ndcg@32:0.98832
+[100]   validation_0-ndcg@32:0.98882
+[110]   validation_0-ndcg@32:0.98918
+[120]   validation_0-ndcg@32:0.99016
+[130]   validation_0-ndcg@32:0.99134
+[140]   validation_0-ndcg@32:0.99174
+[150]   validation_0-ndcg@32:0.99207
+[160]   validation_0-ndcg@32:0.99218
+[170]   validation_0-ndcg@32:0.99238
+[180]   validation_0-ndcg@32:0.99276
+[190]   validation_0-ndcg@32:0.99284
+[200]   validation_0-ndcg@32:0.99291
+[210]   validation_0-ndcg@32:0.99316
+[220]   validation_0-ndcg@32:0.99323
+[230]   validation_0-ndcg@32:0.99343
+[240]   validation_0-ndcg@32:0.99358
+[250]   validation_0-ndcg@32:0.99372
+[260]   validation_0-ndcg@32:0.99407
+[270]   validation_0-ndcg@32:0.99410
+[280]   validation_0-ndcg@32:0.99427
+[290]   validation_0-ndcg@32:0.99409
+[300]   validation_0-ndcg@32:0.99425
+[303]   validation_0-ndcg@32:0.99429
+2026-04-20 00:41:56,170 - INFO - Step 4: nDCG Evaluation (District Cross-Validation)...
+2026-04-20 00:41:57,661 - INFO - Honest nDCG@10 (Cross-District): 0.9695
+2026-04-20 00:41:57,662 - INFO - Feature Importances: {'price_prox': np.float32(0.7484105), 'geo_log': np.float32(0.120144315), 'semantic_sim': np.float32(0.014592591), 'type_sim': np.float32(0.044699635), 'amenity_jaccard': np.float32(0.0521974), 'desc_log_diff': np.float32(0.0043589654), 'beds_diff': np.float32(0.003921208), 'baths_diff': np.float32(0.002516951), 'price_sqft_diff': np.float32(0.0036242572), 'sqft_diff': np.float32(0.005534214)}
+2026-04-20 00:41:57,663 - INFO - Step 5: Exporting Final v8.3 Master Artifacts...
+2026-04-20 00:41:57,875 - INFO - PROJECT COMPLETE: Honest Reality Protocol (v8.3) Active.
+
+
+
+
+
+
+1st quest ans: the analyzer job is to give the recommender output and the processed data a meaning and to express that meaning with natural language we need an llm what i'm saying the recommender is the calculator that do the dirty job the analyzer is the brain that gives things meanings and the llm is the tounge that express these meanings so i prefer it's enought for the analyzer to give the meaning and use the insight builder as the worker that prepare the analyzer's output to the llm and we will discuss the essence of the chatbot module and its submodules later after finishing the analyzer
+2nd quest ans: absolutely 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[0]     validation_0-ndcg@32:0.90465
+[10]    validation_0-ndcg@32:0.90557
+[20]    validation_0-ndcg@32:0.90901
+[30]    validation_0-ndcg@32:0.91089
+[40]    validation_0-ndcg@32:0.91222
+[50]    validation_0-ndcg@32:0.91264
+[60]    validation_0-ndcg@32:0.91439
+[70]    validation_0-ndcg@32:0.91475
+[80]    validation_0-ndcg@32:0.91491
+[90]    validation_0-ndcg@32:0.91570
+[100]   validation_0-ndcg@32:0.91529
+[110]   validation_0-ndcg@32:0.91530
+[120]   validation_0-ndcg@32:0.91621
+[128]   validation_0-ndcg@32:0.91672
+Stage 5: Master Scoreboard Evaluation (nDCG, MRR, Diversity, Coverage)...
+
+==================================================
+      PROPERTY RECOMMENDER MASTER SCOREBOARD (v9.0)
+==================================================
+nDCG@10 (Ranking Quality):    0.8472
+MRR (Search Effectiveness):   0.4652
+Spatial Diversity (Avg km):    60.4469 km
+Catalog Coverage (%):         2.67%
+==================================================
+
+
+
+[0]     validation_0-ndcg@32:0.85230
+[10]    validation_0-ndcg@32:0.87259
+[20]    validation_0-ndcg@32:0.87279
+[30]    validation_0-ndcg@32:0.87748
+[40]    validation_0-ndcg@32:0.87834
+[50]    validation_0-ndcg@32:0.88421
+[60]    validation_0-ndcg@32:0.88845
+[70]    validation_0-ndcg@32:0.89141
+[80]    validation_0-ndcg@32:0.89303
+[90]    validation_0-ndcg@32:0.89629
+[100]   validation_0-ndcg@32:0.89704
+[110]   validation_0-ndcg@32:0.89780
+[120]   validation_0-ndcg@32:0.90069
+[130]   validation_0-ndcg@32:0.90166
+[140]   validation_0-ndcg@32:0.90309
+[150]   validation_0-ndcg@32:0.90608
+[160]   validation_0-ndcg@32:0.90597
+[170]   validation_0-ndcg@32:0.90678
+[180]   validation_0-ndcg@32:0.90699
+[190]   validation_0-ndcg@32:0.90660
+[195]   validation_0-ndcg@32:0.90695
+Stage 5: Final Balanced Evaluation...
+
+==================================================
+      BALANCED RECOMMENDER SCOREBOARD (v9.5)
+==================================================
+nDCG@10 (Ranking Quality):    0.8180
+MRR (Search Effectiveness):   0.5739
+Spatial Diversity (Avg km):    28.6393 km
+Catalog Coverage (%):         2.72%
+==================================================

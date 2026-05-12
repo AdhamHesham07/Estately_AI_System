@@ -1,0 +1,21 @@
+egypt house pricing features:
+ad_id : "Ad id 1234.."
+type: apartment, duplex... 
+price: 1234..
+area: property size in meters square
+bedrooms: number of bedrooms
+bathrooms: number of bathrooms
+level : number of level in the building
+furnished: yes/no
+rent: yes/no
+city: giza, cairo,...
+region: the region address
+
+cairo house pricing
+type: apartment,...
+title: a describtion about the property details
+location: detailed address of the property
+bedroom: number of bedrooms
+bathroom: number of bathrooms
+size_sqm : property size in meters sqaure
+price: 1234..

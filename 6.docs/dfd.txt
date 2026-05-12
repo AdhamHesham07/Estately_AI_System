@@ -1,0 +1,137 @@
+1. DFD Level 0 (Context Diagram)
+
+This shows the system as a single process.
+
+                +---------------------------+
+Buyer --------->|                           |
+Tenant -------->|                           |
+Owner --------->|                           |
+Agent --------->|        Estately           |
+Developer ----->|        Platform           |
+Admin --------->|                           |
+                |                           |
+                +-------------+-------------+
+                              |
+                              v
+                       System Outputs
+                   (Search Results,
+                   Listing Status,
+                   Visit Confirmations,
+                   Notifications)
+2. DFD Level 1
+
+Now the system is broken into main processes.
+
+Processes
+
+User Management
+
+Property Listing Management
+
+Property Search System
+
+Favorites Management
+
+Appointment Scheduling
+
+Chatbot Assistance
+
+Admin Control
+
+Data Stores
+
+D1 Users
+
+D2 Properties
+
+D3 Favorites
+
+D4 Appointments
+
+D5 Projects
+
+Diagram
+Buyer / Tenant
+     |
+     v
++------------------------+
+| 3. Property Search     |
++------------------------+
+     |
+     v
+[D2 Properties Database]
+
+
+Owner / Agent
+     |
+     v
++------------------------------+
+| 2. Property Listing Manager  |
++------------------------------+
+     |
+     v
+[D2 Properties Database]
+
+
+Buyer
+     |
+     v
++-------------------------+
+| 4. Favorites Management |
++-------------------------+
+     |
+     v
+[D3 Favorites Database]
+
+
+Buyer
+     |
+     v
++----------------------------+
+| 5. Appointment Scheduling  |
++----------------------------+
+     |
+     v
+[D4 Appointments Database]
+
+
+Admin
+     |
+     v
++-----------------------+
+| 7. Admin Management   |
++-----------------------+
+     |
+     v
+[D1 Users Database]
+3. DFD Level 2 — Property Search Process
+
+Expanding Process 3: Property Search
+
+Buyer
+  |
+  v
++----------------------------+
+| 3.1 Receive Search Input   |
++----------------------------+
+  |
+  v
++----------------------------+
+| 3.2 Query Property Data    |
++----------------------------+
+  |
+  v
+[Properties Database]
+  |
+  v
++----------------------------+
+| 3.3 Apply Filters          |
++----------------------------+
+  |
+  v
++----------------------------+
+| 3.4 Generate Results       |
++----------------------------+
+  |
+  v
+Buyer (Search Results)
