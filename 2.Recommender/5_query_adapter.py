@@ -87,7 +87,7 @@ class QueryAdapter:
         """
         target_town = str(query.get('town', '')).lower()
         target_city = str(query.get('city', '')).lower()
-        target_type = str(query.get('property_type', 'Apartment')).lower()
+        target_types = [t.strip().lower() for t in str(query.get('property_type', 'Apartment')).split(',')]
         
         # Smart Imputation: Filter training data contextually
         location_filtered_data = pd.DataFrame()
@@ -105,7 +105,7 @@ class QueryAdapter:
             location_filtered_data = training_data.copy() # Global fallback
             
         # Further refine by property type to get accurate lookalikes
-        type_filtered_data = location_filtered_data[location_filtered_data['property_type'].fillna('').astype(str).str.lower() == target_type]
+        type_filtered_data = location_filtered_data[location_filtered_data['property_type'].fillna('').astype(str).str.lower().isin(target_types)]
         imputation_source = type_filtered_data if not type_filtered_data.empty else location_filtered_data
             
         imputation_source.loc[:, 'price_egp'] = pd.to_numeric(imputation_source['price_egp'], errors='coerce')
@@ -131,7 +131,7 @@ class QueryAdapter:
             'category': query.get('category', 'buy').lower(),
             'city': query.get('city', ''),
             'town': query.get('town', ''),
-            'property_type': query.get('property_type', 'Apartment'),
+            'property_type': target_types[0] if target_types else 'Apartment',
             'bedrooms': target_bedrooms,
             'bathrooms': query.get('bathrooms', max(1, target_bedrooms - 1)),
             'price_egp': target_price,
@@ -249,8 +249,8 @@ class QueryAdapter:
         
         if len(geographic_candidate_pool) > 0:
             # Smart Exploration: Prioritize properties that match the type and have high quality
-            target_property_type = query.get('property_type', 'Apartment')
-            property_type_matches = geographic_candidate_pool[geographic_candidate_pool['property_type'].fillna('').astype(str).str.lower() == target_property_type.lower()]
+            target_property_types = [t.strip().lower() for t in str(query.get('property_type', 'Apartment')).split(',')]
+            property_type_matches = geographic_candidate_pool[geographic_candidate_pool['property_type'].fillna('').astype(str).str.lower().isin(target_property_types)]
             
             if not property_type_matches.empty:
                 # Top quality matches for the requested type

@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import uuid
@@ -11,9 +12,14 @@ sys.path.append(os.path.join(BASE_DIR, "1.Agent"))
 build_agent_graph = importlib.import_module("4_graph_builder").build_agent_graph
 
 load_dotenv(".env")
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
+logging.getLogger("litellm").setLevel(logging.WARNING)
+logging.getLogger("langchain_core").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 
 def run_cli():
-    print("--- [CLI] Booting AI Agent Graph... ---")
     agent_app = build_agent_graph()
     
     # Generate a unique thread ID for this session
@@ -39,12 +45,19 @@ def run_cli():
             "confidence_score": 1.0,
             "is_out_of_domain": False,
             "audit_retries": 0,
+            "user_language": "en"
         }
         
         try:
             # Execute Graph
             result = agent_app.invoke(inputs, config)
             
+            state_snapshot = {
+                "active_intent": result.get("active_intent"),
+                "user_language": result.get("user_language"),
+            }
+            print(f"[STATE] {state_snapshot}")
+
             # Extract final message
             messages = result.get("messages", [])
             if messages:
@@ -53,7 +66,7 @@ def run_cli():
                 print("Agent: [No response generated]\n")
                 
         except Exception as e:
-            print(f"!!! Error: {e}\n")
+            print(f"[ERROR] {e}\n")
 
 if __name__ == "__main__":
     run_cli()

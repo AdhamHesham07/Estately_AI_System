@@ -23,7 +23,7 @@ def route_from_brain_to_next_step(current_agent_state: AgentState) -> Literal["t
     """
     if current_agent_state.get("is_out_of_domain") or current_agent_state.get("missing_info"):
         return "tongue"
-    if current_agent_state.get("active_intent") in ["search", "analyze", "book"]:
+    if current_agent_state.get("active_intent") in ["search", "analyze", "book", "discussion"]:
         return "tools"
     return "tongue"
 

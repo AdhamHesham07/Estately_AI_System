@@ -129,7 +129,7 @@ def chat_with_agent(chat_input: ChatMessage):
     try:
         # Configure memory for the specific session
         config = {"configurable": {"thread_id": chat_input.session_id}}
-        inputs = {"messages": [HumanMessage(content=chat_input.message)]}
+        inputs = {"messages": [HumanMessage(content=chat_input.message)], "user_language": "en"}
         
         # Invoke the LangGraph agent
         result = agent_app.invoke(inputs, config)

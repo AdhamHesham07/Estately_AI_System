@@ -8,7 +8,7 @@ AGENT_CONFIG = {
     "model": "groq/llama-3.3-70b-versatile",
     
     # List of fallback models to use if the primary model fails
-    "fallback_models": ["gemini/gemini-2.0-flash", "ollama/gemma:2b"],
+    "fallback_models": ["gemini/gemini-2.0-flash"],
 
     # Auditor retry guard: max times the loop can send back for correction
     "max_audit_retries": 2,

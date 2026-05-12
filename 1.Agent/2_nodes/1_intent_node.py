@@ -22,8 +22,10 @@ if groq_api_key:
 
 # Import internal configurations and states
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.dirname(__file__))
 AgentState = importlib.import_module("3_state_definition").AgentState
 AGENT_CONFIG = importlib.import_module("1_agent_config").AGENT_CONFIG
+from translation_utils import build_english_history, contains_arabic, translate_to_english, litellm_completion_with_groq_key_fallback
 PRIMARY_MODEL = AGENT_CONFIG["model"]
 FALLBACK_MODELS_LIST = AGENT_CONFIG.get("fallback_models", [])
 
@@ -33,14 +35,17 @@ You are the AI Brain of an Elite Real Estate Concierge.
 Extract user requirements from the history into structured JSON.
 
 EXTRACT:
-- intent: 'search', 'analyze', 'book', or 'idle'.
+- intent: 'search', 'analyze', 'book', 'discussion', or 'idle'.
 - filters: { "category": "buy"|"rent", "town": string, "bedrooms": int, "property_type": string, "price_max": float, "price_min": float }
 - booking_info: { "property_id": string, "user_name": string, "phone": string, "date": string }
+- discussion_context: { "property_ids": [string], "comparison_properties": [string], "question_type": "comparison"|"details"|"opinion"|"general" }
 - confidence: 0.0 to 1.0
 - out_of_domain: true if user is talking about something unrelated to real estate.
 
 RULE: "Examine", "Visit", "See in person", "Book", or "Appointment" = intent 'book'.
-RULE: CONTEXT RESOLUTION - If the user says "the first one", "the second one", or "that villa", look at the IDs (e.g., Listing ID 11225) mentioned in the previous AI message and put that ID into booking_info.property_id.
+RULE: "Which is better", "Compare", "Difference", "vs", "Tell me more", "What about", "Pros and cons" = intent 'discussion'.
+RULE: "Your opinion", "What do you think", "Should I", "Recommendation", "Better choice" = intent 'discussion'.
+RULE: CONTEXT RESOLUTION - If the user says "the first one", "the second one", "that villa", or "property #123", look at the IDs (e.g., Listing ID 11225) mentioned in the previous AI message and put that ID into discussion_context.property_ids or booking_info.property_id.
 RULE: "7 million" = 7,000,000. "700k" = 700,000. Be extremely careful with zeros.
 RULE: If the user says "I want to see properties in Zayed", intent is 'search'.
 RULE: If the user asks "How is the market in New Cairo?", intent is 'analyze'.
@@ -117,7 +122,12 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     """
     # 1. Prepare conversation history for the LLM context window
     conversation_messages = current_state.get("messages", [])
+    latest_user_message = conversation_messages[-1].content if conversation_messages else ""
+    history_contains_arabic = any(contains_arabic(getattr(msg, "content", "")) for msg in conversation_messages)
     formatted_history_string = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in conversation_messages])
+    history_for_llm = build_english_history(conversation_messages) if history_contains_arabic else formatted_history_string
+    latest_user_message_for_regex = translate_to_english(latest_user_message) if contains_arabic(latest_user_message) else latest_user_message
+    user_language = "ar-EG" if contains_arabic(latest_user_message) else "en"
     
     max_retries_allowed = 2
     last_encountered_error = None
@@ -133,11 +143,11 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     for retry_attempt in range(max_retries_allowed):
         print(f"--- [BRAIN] Calling Model: {target_llm_model} ---")
         try:
-            llm_response = litellm.completion(
+            llm_response = litellm_completion_with_groq_key_fallback(
                 model=target_llm_model,
                 messages=[
                     {"role": "system", "content": INTENT_EXTRACTION_PROMPT},
-                    {"role": "user", "content": f"History:\n{formatted_history_string}\n\nReturn JSON:"}
+                    {"role": "user", "content": f"History:\n{history_for_llm}\n\nReturn JSON:"}
                 ],
                 response_format={"type": "json_object"},
                 fallbacks=available_fallbacks
@@ -163,7 +173,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             last_encountered_error = api_error
             # Provide explicit feedback to the LLM on the next attempt if JSON parsing failed
             if retry_attempt < max_retries_allowed - 1:
-                formatted_history_string += "\n(Note: Your previous response was not valid JSON. Please fix it.)"
+                history_for_llm += "\n(Note: Your previous response was not valid JSON. Please fix it.)"
 
     # 4. Handle Unrecoverable API Errors (e.g. Quota exhaustion)
     if last_encountered_error is not None:
@@ -188,8 +198,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     llm_extracted_filters = extracted_json_data.get("filters") or {}
     
     # SAFETY NET: Run hardened regex extraction on the most recent user message
-    latest_user_message = conversation_messages[-1].content if conversation_messages else ""
-    regex_extracted_data = extract_entities_via_regex(latest_user_message)
+    regex_extracted_data = extract_entities_via_regex(latest_user_message_for_regex)
     
     # Priority 1: Apply LLM extracted results
     for filter_key, filter_value in llm_extracted_filters.items():
@@ -209,9 +218,13 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             pass
 
     # Safety net: Infer category from explicit wording if the LLM completely missed it
-    inferred_category_from_text = infer_transaction_category(f" {formatted_history_string.lower()} ")
+    inferred_category_from_text = infer_transaction_category(f" {history_for_llm.lower()} ")
     if inferred_category_from_text and not merged_filters.get("category"):
         merged_filters["category"] = inferred_category_from_text
+
+    # Default property_type to both Apartment and Villa if not specified, to make search more flexible
+    if "property_type" not in merged_filters:
+        merged_filters["property_type"] = "Apartment,Villa"
             
     # Expert Logic: Handle Bookings by merging partial details across turns
     merged_booking_details = current_state.get("booking_details", {}).copy()
@@ -223,6 +236,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     # 6. Guardrails: Calculate missing prerequisites dynamically based on workflow intent
     missing_required_fields = []
     detected_intent = extracted_json_data.get("intent", "idle")
+    discussion_context = extracted_json_data.get("discussion_context", {})
     
     if detected_intent == "search":
         # Search queries must have at least these three fields to execute cleanly
@@ -235,6 +249,11 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         # Booking queries require identity and target
         critical_booking_fields = ["property_id", "user_name", "phone", "date"]
         missing_required_fields = [field for field in critical_booking_fields if field not in merged_booking_details]
+    elif detected_intent == "discussion":
+        # Discussion requires we have context about which properties they're discussing
+        # If no IDs mentioned, ask the user to specify
+        if not discussion_context.get("property_ids"):
+            missing_required_fields = ["property_reference"]  # Ask user which property they mean
     
     # Final Payload returned to the Graph State
     return {
@@ -244,5 +263,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         "missing_info": missing_required_fields,
         "confidence_score": extracted_json_data.get("confidence", 0.5),
         "is_out_of_domain": extracted_json_data.get("out_of_domain", False),
-        "active_model": actual_model_used if last_encountered_error is None else target_llm_model
+        "active_model": actual_model_used if last_encountered_error is None else target_llm_model,
+        "user_language": user_language,
+        "discussion_context": discussion_context
     }

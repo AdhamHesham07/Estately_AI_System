@@ -8,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 AgentState = importlib.import_module("3_state_definition").AgentState
 DataBridge = importlib.import_module("2_data_bridge").DataBridge
-from 3_sceduler.booking_logic import BookingEngine
+BookingEngine = importlib.import_module("3_sceduler.booking_logic").BookingEngine
 
 def tool_node(current_state: AgentState) -> Dict[str, Any]:
     """
@@ -54,8 +54,37 @@ def tool_node(current_state: AgentState) -> Dict[str, Any]:
         # [BOOK] Register the appointment securely in the SQL Database
         booking_registration_result = BookingEngine.register_booking(current_state.get("booking_details", {}))
         tool_execution_results["booking_response"] = booking_registration_result
+    
+    elif detected_intent == "discussion":
+        # [DISCUSSION] Provide detailed insights, comparisons, and expert opinions on specific properties
+        discussion_context = current_state.get("discussion_context", {})
+        property_ids = discussion_context.get("property_ids", [])
+        
+        # Fetch detailed analysis for the properties being discussed
+        discussion_briefs = []
+        if property_ids:
+            for property_id in property_ids:
+                # Build a search context around the property to get analysis
+                prop_analysis = DataBridge.execute_fair_price_check({
+                    "listing_id": property_id
+                }, search_filters.get('category', 'buy'))
+                discussion_briefs.append({
+                    "listing_id": property_id,
+                    "analysis": prop_analysis
+                })
+        
+        # Store discussion data for the Tongue to format into a conversational response
+        tool_execution_results["discussion_briefs"] = discussion_briefs
+        tool_execution_results["discussion_context"] = discussion_context
+    
+    # Store recent properties from recommendations for discussion context
+    if detected_intent == "search":
+        recent_props = tool_execution_results.get("recommendations", {}).get("candidates", [])
+        if recent_props:
+            tool_execution_results["recent_properties"] = recent_props[:5]  # Keep top 5
         
     # Return the newly mutated tool states to the graph
     return {
-        "tool_outputs": tool_execution_results
+        "tool_outputs": tool_execution_results,
+        "recent_properties": tool_execution_results.get("recent_properties", current_state.get("recent_properties", []))
     }

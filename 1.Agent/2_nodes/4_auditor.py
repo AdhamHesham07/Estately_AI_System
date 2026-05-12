@@ -8,6 +8,7 @@ import litellm
 
 # Set paths to allow cross-module imports
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.dirname(__file__))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
 
@@ -24,6 +25,7 @@ AgentState = importlib.import_module("3_state_definition").AgentState
 AGENT_CONFIG = importlib.import_module("1_agent_config").AGENT_CONFIG
 PRIMARY_MODEL = AGENT_CONFIG["model"]
 FALLBACK_MODELS_LIST = AGENT_CONFIG.get("fallback_models", [])
+from translation_utils import translate_for_audit, litellm_completion_with_groq_key_fallback
 
 # The system instruction set for the Auditor to enforce anti-hallucination guardrails
 AUDITOR_SYSTEM_PROMPT = """
@@ -72,7 +74,7 @@ def auditor_node(current_state: AgentState) -> Dict[str, Any]:
     candidate_properties = tool_execution_results.get("recommendations", {}).get("candidates", [])
     
     if detected_intent not in ["search", "analyze"] or not has_meaningful_filters or is_query_out_of_domain or not candidate_properties:
-        skip_reason = "Greeting/Idle" if detected_intent == "idle" else "Out of Domain" if is_query_out_of_domain else "No Data matches"
+        skip_reason = "Greeting/Idle" if detected_intent == "idle" else "Discussion/Booking" if detected_intent in ["discussion", "book"] else "Out of Domain" if is_query_out_of_domain else "No Data matches"
         print(f"--- [AUDITOR_PASS] Skipping strict check for {skip_reason} ---")
         return {
             "confidence_score": 1.0, 
@@ -93,6 +95,7 @@ def auditor_node(current_state: AgentState) -> Dict[str, Any]:
     
     # Extract the actual text the Assistant just tried to say
     latest_assistant_message = current_state["messages"][-1].content if current_state["messages"] else ""
+    latest_assistant_message_for_audit = translate_for_audit(latest_assistant_message)
     current_retry_count = current_state.get("audit_retries", 0)
     
     print(f"--- [AUDITOR] Verifying Response Integrity (attempt {current_retry_count+1}) ---")
@@ -117,10 +120,10 @@ def auditor_node(current_state: AgentState) -> Dict[str, Any]:
             intent=detected_intent,
             filters=json.dumps(search_filters), 
             tool_context=tool_context_string,
-            response=latest_assistant_message
+            response=latest_assistant_message_for_audit
         )
         print(f"--- [AUDITOR] Calling Model: {target_llm_model} ---")
-        llm_response = litellm.completion(
+        llm_response = litellm_completion_with_groq_key_fallback(
             model=target_llm_model,
             messages=[
                 {"role": "system", "content": formatted_auditor_prompt},

@@ -28,3 +28,7 @@ class AgentState(TypedDict):
     is_out_of_domain: bool      # Flag to prevent hallucination on non-real-estate queries
     audit_retries: int          # Tracks how many times the Auditor rejected the response
     active_model: str           # Remembers the successfully used LLM for sticky fallbacks
+    user_language: Optional[str]  # Tracks user language preference for translation (e.g. 'en' or 'ar-EG')
+    
+    # Discussion Context: Tracks recently recommended properties for consultative follow-ups
+    recent_properties: List[dict]  # List of property objects from last recommendation
