@@ -32,3 +32,16 @@ class AgentState(TypedDict):
     
     # Discussion Context: Tracks recently recommended properties for consultative follow-ups
     recent_properties: List[dict]  # List of property objects from last recommendation
+    discussion_context: dict
+
+    # Dialogue manager memory for multi-turn, human-like continuity
+    dialogue_state: dict
+    reference_map: dict
+    focus_listing_id: Optional[str]
+    last_recommendation_snapshot: List[dict]
+    response_mode: str
+    dialogue_act: str
+    target_property_refs: List[dict]
+    carry_forward_slots: dict
+    slot_updates: dict
+    response_plan: dict

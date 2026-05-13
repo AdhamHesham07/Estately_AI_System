@@ -44,6 +44,18 @@ for label, turns, lang in conversations:
         'is_out_of_domain': False,
         'audit_retries': 0,
         'user_language': lang,
+        'recent_properties': [],
+        'discussion_context': {},
+        'dialogue_state': {},
+        'reference_map': {},
+        'focus_listing_id': None,
+        'last_recommendation_snapshot': [],
+        'response_mode': 'tool_required',
+        'dialogue_act': 'general',
+        'target_property_refs': [],
+        'carry_forward_slots': {},
+        'slot_updates': {},
+        'response_plan': {},
     }
     for idx, text in enumerate(turns, start=1):
         state['messages'] = [HumanMessage(content=text)]

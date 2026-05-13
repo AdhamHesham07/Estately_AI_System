@@ -45,7 +45,19 @@ def run_cli():
             "confidence_score": 1.0,
             "is_out_of_domain": False,
             "audit_retries": 0,
-            "user_language": "en"
+            "user_language": "en",
+            "recent_properties": [],
+            "discussion_context": {},
+            "dialogue_state": {},
+            "reference_map": {},
+            "focus_listing_id": None,
+            "last_recommendation_snapshot": [],
+            "response_mode": "tool_required",
+            "dialogue_act": "general",
+            "target_property_refs": [],
+            "carry_forward_slots": {},
+            "slot_updates": {},
+            "response_plan": {},
         }
         
         try:

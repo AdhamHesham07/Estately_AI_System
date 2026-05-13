@@ -39,6 +39,7 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
     missing_required_fields = current_state.get("missing_info", [])
     tool_execution_results = current_state.get("tool_outputs", {})
     user_language = current_state.get("user_language", "en")
+    dialogue_act = current_state.get("dialogue_act", "general")
 
     print(f"--- [TONGUE] Generating Professional Response ---")
 
@@ -67,7 +68,14 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
         missing_info_response = f"I'd love to help you find the perfect home! Could you please specify the {', '.join(translated_missing_fields)}?"
         if user_language.startswith("ar"):
             missing_info_response = translate_to_arabic(missing_info_response)
-        return {"messages": [AIMessage(content=missing_info_response)]}
+        return {
+            "messages": [AIMessage(content=missing_info_response)],
+            "response_plan": {
+                "answer_first": missing_info_response,
+                "evidence_block": [],
+                "next_step_prompt": "Ask for the minimum missing fields only."
+            }
+        }
 
     # 2. Process Intent Paths
     if detected_intent in ["search", "analyze"]:
@@ -166,7 +174,12 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
 
         return {
             "messages": [AIMessage(content=final_narrative_text)],
-            "active_model": actual_model_used
+            "active_model": actual_model_used,
+            "response_plan": {
+                "answer_first": final_narrative_text.split("\n")[0] if final_narrative_text else "",
+                "evidence_block": storytelling_processed_properties[:3],
+                "next_step_prompt": "Offer one precise follow-up preference question."
+            }
         }
 
     elif detected_intent == "book" and "booking_response" in tool_execution_results:
@@ -178,7 +191,14 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
             booking_success_message = "I'm sorry, I couldn't complete the registration. It seems some information is still missing. Could you please provide your name and phone number?"
         if user_language.startswith("ar"):
             booking_success_message = translate_to_arabic(booking_success_message)
-        return {"messages": [AIMessage(content=booking_success_message)]}
+        return {
+            "messages": [AIMessage(content=booking_success_message)],
+            "response_plan": {
+                "answer_first": booking_success_message,
+                "evidence_block": [booking_registration_result],
+                "next_step_prompt": "Offer to adjust booking date/time if needed."
+            }
+        }
 
     elif detected_intent == "discussion":
         # [DISCUSSION] Provide consultant-like analysis and opinions on properties being discussed
@@ -197,6 +217,28 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
             "user_category": current_filters.get("category", "buy")
         }
         
+        focused_property = tool_execution_results.get("focused_property", {}) or {}
+        comparison_set = tool_execution_results.get("comparison_set", []) or []
+        reference_intro = "About the property you referenced"
+        if focused_property.get("listing_id"):
+            reference_intro = f"About listing #{focused_property.get('listing_id')}"
+
+        deterministic_answer = ""
+        if dialogue_act == "compare" and len(comparison_set) >= 2:
+            left = comparison_set[0]
+            right = comparison_set[1]
+            deterministic_answer = (
+                f"I compared listing #{left.get('listing_id')} and listing #{right.get('listing_id')}. "
+                f"The first is around {left.get('price_egp')} EGP in {left.get('town')}, while the second is around {right.get('price_egp')} EGP in {right.get('town')}. "
+                "If you want, I can break it down by value-for-money and livability."
+            )
+        elif focused_property:
+            deterministic_answer = (
+                f"{reference_intro}, it is priced around {focused_property.get('price_egp')} EGP, "
+                f"offers {focused_property.get('bedrooms')} bedrooms, and is located in {focused_property.get('town')}. "
+                "I can also walk you through pros/cons and investment potential."
+            )
+
         discussion_prompt = f"""
         You are an Elite Real Estate Investment Consultant having a consultative conversation with a client.
         The client is asking follow-up questions or seeking your expert opinion on properties.
@@ -213,6 +255,8 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
         USER INTENT: {comparison_context.get('user_category')}
         
         INSTRUCTIONS FOR CONSULTATIVE RESPONSE:
+        - OPENING PRIORITY: Start by directly answering the user's exact question in the first 1-2 lines.
+        - REFERENCE HANDLING: If user references first/second/that one, acknowledge it explicitly.
         - ACT AS A TRUSTED ADVISOR: Use phrases like "In my professional opinion," "What I'd recommend," "Based on the market data..."
         - FOR COMPARISONS: Highlight trade-offs explicitly (e.g., "Property A is cheaper but Property B has better location").
         - FOR OPINIONS: Back your recommendations with market data and logical reasoning.
@@ -246,6 +290,8 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
                         break
 
             discussion_response = llm_response.choices[0].message.content
+            if deterministic_answer:
+                discussion_response = f"{deterministic_answer}\n\n{discussion_response}"
             if user_language.startswith("ar"):
                 discussion_response = translate_to_arabic(discussion_response)
             print(f"--- [TONGUE] Discussion: {target_llm_model} | Actual: {actual_model_used} ---")
@@ -256,10 +302,22 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
 
         return {
             "messages": [AIMessage(content=discussion_response)],
-            "active_model": actual_model_used
+            "active_model": actual_model_used,
+            "response_plan": {
+                "answer_first": deterministic_answer or (discussion_response.split("\n")[0] if discussion_response else ""),
+                "evidence_block": discussion_briefs[:3],
+                "next_step_prompt": "Ask one targeted next-step question tied to commute, budget, or amenities."
+            }
         }
 
     idle_message = "I'm your AI Real Estate Agent. How can I help you navigate the market today?"
     if user_language.startswith("ar"):
         idle_message = translate_to_arabic(idle_message)
-    return {"messages": [AIMessage(content=idle_message)]}
+    return {
+        "messages": [AIMessage(content=idle_message)],
+        "response_plan": {
+            "answer_first": idle_message,
+            "evidence_block": [],
+            "next_step_prompt": "Invite user to share budget, area, and property type."
+        }
+    }

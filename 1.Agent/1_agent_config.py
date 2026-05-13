@@ -12,6 +12,12 @@ AGENT_CONFIG = {
 
     # Auditor retry guard: max times the loop can send back for correction
     "max_audit_retries": 2,
+    
+    # Auditor mode:
+    # - "deterministic": use rule-based validation only
+    # - "hybrid": deterministic first, then optional LLM audit
+    "auditor_mode": "hybrid",
+    "auditor_use_llm": False,
 
     # Intent extraction minimum confidence to proceed without asking for more info
     "min_intent_confidence": 0.5,

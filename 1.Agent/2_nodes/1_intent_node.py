@@ -114,6 +114,39 @@ def extract_entities_via_regex(user_text: str) -> dict:
         
     return extracted_data
 
+def _detect_dialogue_act(latest_user_message: str) -> str:
+    normalized = f" {str(latest_user_message or '').lower()} "
+    if any(token in normalized for token in [" compare ", " vs ", " versus ", " difference ", " better "]):
+        return "compare"
+    if any(token in normalized for token in [" details ", " tell me more ", " more about ", " explain ", " pros ", " cons "]):
+        return "request_details"
+    if any(token in normalized for token in [" cheaper ", " same ", " instead ", " change ", " but "]):
+        return "refine_search"
+    if any(token in normalized for token in [" yes ", " okay ", " go ahead ", " confirm "]):
+        return "confirm"
+    if any(token in normalized for token in [" hi ", " hello ", " hey "]):
+        return "chitchat"
+    return "general"
+
+def _extract_property_refs(latest_user_message: str) -> list:
+    normalized = str(latest_user_message or "").lower()
+    refs = []
+    ordinal_map = {
+        "first": 1, "1st": 1, "one": 1,
+        "second": 2, "2nd": 2, "two": 2,
+        "third": 3, "3rd": 3, "three": 3,
+        "fourth": 4, "4th": 4, "four": 4,
+        "fifth": 5, "5th": 5, "five": 5
+    }
+    for token, ordinal in ordinal_map.items():
+        if re.search(rf"\b{re.escape(token)}\b", normalized):
+            refs.append({"kind": "ordinal", "value": ordinal})
+    for match in re.findall(r"(?:#|id\s*)(\d{3,10})", normalized):
+        refs.append({"kind": "listing_id", "value": str(match)})
+    if any(pronoun in normalized for pronoun in ["this one", "that one", "it", "that property"]):
+        refs.append({"kind": "pronoun", "value": "focus"})
+    return refs
+
 def intent_node(current_state: AgentState) -> Dict[str, Any]:
     """
     NODE 1: Intent & Entity Extraction (The Brain)
@@ -256,6 +289,37 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     missing_required_fields = []
     detected_intent = extracted_json_data.get("intent", "idle")
     discussion_context = extracted_json_data.get("discussion_context", {})
+    dialogue_act = _detect_dialogue_act(latest_user_message_for_regex)
+    target_property_refs = _extract_property_refs(latest_user_message_for_regex)
+    previous_reference_map = current_state.get("reference_map", {}) or {}
+    previous_focus_listing_id = current_state.get("focus_listing_id")
+    slot_updates = {
+        k: v for k, v in llm_extracted_filters.items() if v is not None and v != ""
+    }
+    carry_forward_slots = merged_filters.copy()
+
+    # Build fresh ordinal map from recent properties whenever available.
+    recent_properties = current_state.get("recent_properties", []) or []
+    reference_map = previous_reference_map.copy()
+    if recent_properties:
+        reference_map = {}
+        for idx, prop in enumerate(recent_properties[:5], start=1):
+            listing_id = prop.get("listing_id")
+            if listing_id is not None:
+                reference_map[str(idx)] = str(listing_id)
+
+    resolved_reference_ids = []
+    for ref in target_property_refs:
+        if ref.get("kind") == "listing_id":
+            resolved_reference_ids.append(str(ref.get("value")))
+        elif ref.get("kind") == "ordinal":
+            resolved_from_ordinal = reference_map.get(str(ref.get("value")))
+            if resolved_from_ordinal:
+                resolved_reference_ids.append(str(resolved_from_ordinal))
+        elif ref.get("kind") == "pronoun" and previous_focus_listing_id:
+            resolved_reference_ids.append(str(previous_focus_listing_id))
+    if resolved_reference_ids:
+        discussion_context["property_ids"] = resolved_reference_ids
     
     if detected_intent == "search":
         # Search queries must have at least these three fields to execute cleanly
@@ -273,6 +337,32 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         # If no IDs mentioned, ask the user to specify
         if not discussion_context.get("property_ids"):
             missing_required_fields = ["property_reference"]  # Ask user which property they mean
+
+    # Deterministic policy overrides for user-friendly multi-turn behavior.
+    if dialogue_act in ["request_details", "compare"] and reference_map:
+        detected_intent = "discussion"
+        if not discussion_context.get("property_ids") and previous_focus_listing_id:
+            discussion_context["property_ids"] = [str(previous_focus_listing_id)]
+            missing_required_fields = []
+    if dialogue_act == "refine_search":
+        detected_intent = "search"
+        missing_required_fields = [field for field in ["town", "property_type", "category"] if field not in merged_filters]
+
+    response_mode = "tool_required"
+    if missing_required_fields:
+        response_mode = "clarify_needed"
+    elif detected_intent in ["discussion", "idle"] and dialogue_act in ["confirm", "chitchat"] and not discussion_context.get("property_ids"):
+        response_mode = "context_only"
+
+    focus_listing_id = previous_focus_listing_id
+    if discussion_context.get("property_ids"):
+        focus_listing_id = str(discussion_context["property_ids"][0])
+
+    dialogue_state = {
+        "last_dialogue_act": dialogue_act,
+        "pending_question": missing_required_fields[0] if missing_required_fields else None,
+        "turn_goal": detected_intent
+    }
     
     # Final Payload returned to the Graph State
     return {
@@ -284,5 +374,13 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         "is_out_of_domain": extracted_json_data.get("out_of_domain", False),
         "active_model": actual_model_used if last_encountered_error is None else target_llm_model,
         "user_language": user_language,
-        "discussion_context": discussion_context
+        "discussion_context": discussion_context,
+        "dialogue_state": dialogue_state,
+        "reference_map": reference_map,
+        "focus_listing_id": focus_listing_id,
+        "response_mode": response_mode,
+        "dialogue_act": dialogue_act,
+        "target_property_refs": target_property_refs,
+        "carry_forward_slots": carry_forward_slots,
+        "slot_updates": slot_updates
     }
