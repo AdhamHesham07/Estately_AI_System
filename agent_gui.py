@@ -21,13 +21,14 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 agent_app = build_agent_graph()
 
-def chat_response(message, history):
+def chat_response(message, history, request: gr.Request):
     """
     Handles communication between Gradio UI and LangGraph Agent.
     """
-    # Gradio 6.0 session persistence: we'll use a session-based ID if possible, 
-    # but for simplicity in the basic GUI, we'll use a stable one or generate per chat.
-    thread_id = "gui_default_session" 
+    # Use a stable per-browser-session thread id to preserve current chat context
+    # without leaking memory across different users/sessions.
+    session_hash = getattr(request, "session_hash", None) if request else None
+    thread_id = f"gui_{session_hash}" if session_hash else str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
     
     try:

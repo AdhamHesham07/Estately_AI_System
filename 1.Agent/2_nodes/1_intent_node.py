@@ -122,10 +122,29 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     """
     # 1. Prepare conversation history for the LLM context window
     conversation_messages = current_state.get("messages", [])
-    latest_user_message = conversation_messages[-1].content if conversation_messages else ""
-    history_contains_arabic = any(contains_arabic(getattr(msg, "content", "")) for msg in conversation_messages)
-    formatted_history_string = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in conversation_messages])
-    history_for_llm = build_english_history(conversation_messages) if history_contains_arabic else formatted_history_string
+
+    # Important: During auditor retry loops, trailing AI draft messages can appear at the end.
+    # Always anchor extraction on the latest human message only.
+    latest_user_index = None
+    for idx in range(len(conversation_messages) - 1, -1, -1):
+        if getattr(conversation_messages[idx], "type", "") == "human":
+            latest_user_index = idx
+            break
+
+    latest_user_message = (
+        conversation_messages[latest_user_index].content
+        if latest_user_index is not None
+        else ""
+    )
+    messages_for_intent = (
+        conversation_messages[: latest_user_index + 1]
+        if latest_user_index is not None
+        else conversation_messages
+    )
+
+    history_contains_arabic = any(contains_arabic(getattr(msg, "content", "")) for msg in messages_for_intent)
+    formatted_history_string = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in messages_for_intent])
+    history_for_llm = build_english_history(messages_for_intent) if history_contains_arabic else formatted_history_string
     latest_user_message_for_regex = translate_to_english(latest_user_message) if contains_arabic(latest_user_message) else latest_user_message
     user_language = "ar-EG" if contains_arabic(latest_user_message) else "en"
     
