@@ -60,7 +60,10 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
     if actual_missing_fields:
         # Provide human-friendly definitions for system keys
         human_readable_field_mapping = {
-            "town": "location", 
+            "town": "location",
+            "location": "preferred area or neighborhood (e.g. Fifth Settlement, Maadi)",
+            "district": "neighborhood or district",
+            "subdistrict": "compound or sub-area",
             "property_type": "type of property (apartment/villa)",
             "category": "whether you are looking to buy or rent"
         }
@@ -85,6 +88,17 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
         recommendation_results = tool_execution_results.get("recommendations") or {}
         candidate_properties = recommendation_results.get("candidates") or []
         user_maximum_budget = current_state.get("current_filters", {}).get("price_max")
+        user_minimum_budget = current_state.get("current_filters", {}).get("price_min")
+        if user_minimum_budget and user_maximum_budget:
+            try:
+                budget_bracket_instruction = (
+                    f"The user's budget band is roughly {float(user_minimum_budget)/1e6:.1f}–{float(user_maximum_budget)/1e6:.1f} million EGP; "
+                    "describe it that way (do not shift to a higher bracket)."
+                )
+            except (TypeError, ValueError):
+                budget_bracket_instruction = "Mention the user's stated budget naturally."
+        else:
+            budget_bracket_instruction = None
         
         # Expert Logic: Pre-process property data with humanized tags before sending to LLM context
         storytelling_processed_properties = []
@@ -93,7 +107,14 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
             enhanced_property_dict['status'] = "Ready to move in" if str(property_data.get('completion_status')).lower() == 'completed' else "Under construction"
             enhanced_property_dict['size_desc'] = f"Generous {property_data.get('area_value')} sqm layout"
             
-            if user_maximum_budget and property_data.get('price_egp'):
+            if user_minimum_budget and user_maximum_budget and property_data.get('price_egp'):
+                try:
+                    property_price = float(property_data['price_egp'])
+                    mid = (float(user_minimum_budget) + float(user_maximum_budget)) / 2.0
+                    enhanced_property_dict['budget_fit'] = f"Within stated band vs midpoint {(property_price/mid)*100:.1f}%"
+                except ValueError:
+                    pass
+            elif user_maximum_budget and property_data.get('price_egp'):
                 try:
                     property_price = float(property_data['price_egp'])
                     target_budget = float(user_maximum_budget)
@@ -113,6 +134,10 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
         narrative_generation_prompt = f"""
         You are an Elite Real Estate Investment Consultant (Concierge Style). 
         Your goal is to present these opportunities with sophistication and expert insight.
+
+        USER_LOCATION_CONTEXT: Respect the user's requested area. If filters include Fifth Settlement / The 5th Settlement, describe listings as being in Fifth Settlement (New Cairo), not as unrelated parts of New Cairo.
+
+        BUDGET_NARRATIVE: {budget_bracket_instruction or "Use the user's maximum budget hint when describing price fit."}
 
         MARKET TRENDS:
         {market_pulse_context}

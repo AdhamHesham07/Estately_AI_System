@@ -36,7 +36,7 @@ Extract user requirements from the history into structured JSON.
 
 EXTRACT:
 - intent: 'search', 'analyze', 'book', 'discussion', or 'idle'.
-- filters: { "category": "buy"|"rent", "town": string, "bedrooms": int, "property_type": string, "price_max": float, "price_min": float }
+- filters: { "category": "buy"|"rent", "town": string, "district": string, "subdistrict": string, "bedrooms": int, "property_type": string, "price_max": float, "price_min": float }
 - booking_info: { "property_id": string, "user_name": string, "phone": string, "date": string }
 - discussion_context: { "property_ids": [string], "comparison_properties": [string], "question_type": "comparison"|"details"|"opinion"|"general" }
 - confidence: 0.0 to 1.0
@@ -52,6 +52,8 @@ RULE: If the user asks "How is the market in New Cairo?", intent is 'analyze'.
 RULE: If the user mentions rent/monthly/per month/lease, set filters.category to "rent".
 RULE: If the user mentions buy/purchase/own/for sale/sell, set filters.category to "buy".
 RULE: When both appear, prioritize the latest explicit user request in the history.
+RULE: "Fifth Settlement", "5th Settlement", "Tagamoa", "التجمع الخامس" = set filters.district to "The 5th Settlement" and filters.town to "New Cairo City" (NOT a vague town alias).
+RULE: Budget ranges like "12-13 million" must set BOTH price_min and price_max in EGP (e.g. 12_000_000 and 13_000_000).
 """
 
 def infer_transaction_category(conversation_history_text: str) -> str:
@@ -78,33 +80,57 @@ def extract_entities_via_regex(user_text: str) -> dict:
     extracted_data = {}
     normalized_text = user_text.lower()
     
-    # 1. Location Detection (Common Areas): Maps slang to canonical database names
-    common_locations_map = {
-        "maadi": ["maadi", "madi"],
-        "zayed": ["zayed", "sheikh zayed", "october"],
-        "tagamoa": ["tagamoa", "new cairo", "fifth settlement"],
-        "shorouk": ["shorouk", "shorok"],
-        "heliopolis": ["heliopolis", "masr el gdida"]
-    }
-    
-    for standard_location, trigger_tokens in common_locations_map.items():
-        if any(token in normalized_text for token in trigger_tokens):
-            extracted_data["town"] = standard_location.capitalize()
-            break
-            
-    # 2. Price Detection (Looking for textual shorthand like '7 million', '7M', etc.)
-    price_pattern_match = re.search(r"(\d+(?:\.\d+)?)\s*(million|m|mln)", normalized_text)
-    if price_pattern_match:
+    # 1. Location: Fifth Settlement / Tagamoa — in our data this is a district under New Cairo, not a town alias.
+    fifth_settlement_triggers = [
+        "fifth settlement", "5th settlement", "fifth settl", "5th settl", "tagamoa", "tagamoaa",
+        "التجمع الخامس",
+    ]
+    if any(tok in normalized_text for tok in fifth_settlement_triggers):
+        extracted_data["town"] = "New Cairo City"
+        extracted_data["district"] = "The 5th Settlement"
+
+    # Other common areas (town-level)
+    if "district" not in extracted_data:
+        common_locations_map = {
+            "maadi": ["maadi", "madi"],
+            "zayed": ["zayed", "sheikh zayed", "6th of october", "6th october"],
+            "shorouk": ["shorouk", "shorok"],
+            "heliopolis": ["heliopolis", "masr el gdida"],
+        }
+        for standard_location, trigger_tokens in common_locations_map.items():
+            if any(token in normalized_text for token in trigger_tokens):
+                extracted_data["town"] = standard_location.capitalize()
+                break
+
+    if "town" not in extracted_data and "new cairo" in normalized_text:
+        extracted_data["town"] = "New Cairo City"
+
+    # 2. Price: range "12-13 million" then single cap
+    range_million = re.search(
+        r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(million|m|mln)",
+        normalized_text,
+    )
+    if range_million:
         try:
-            numeric_value = float(price_pattern_match.group(1))
-            extracted_data["price_max"] = numeric_value * 1_000_000
+            lo = float(range_million.group(1)) * 1_000_000
+            hi = float(range_million.group(2)) * 1_000_000
+            extracted_data["price_min"] = min(lo, hi)
+            extracted_data["price_max"] = max(lo, hi)
         except ValueError:
             pass
-    elif "million" not in normalized_text:
-        # Check for raw numbers > 100k assuming they are budgets
-        large_numbers = re.findall(r"\b(\d{6,10})\b", normalized_text)
-        if large_numbers:
-            extracted_data["price_max"] = float(large_numbers[0])
+
+    if "price_max" not in extracted_data and "price_min" not in extracted_data:
+        price_pattern_match = re.search(r"(\d+(?:\.\d+)?)\s*(million|m|mln)", normalized_text)
+        if price_pattern_match:
+            try:
+                numeric_value = float(price_pattern_match.group(1))
+                extracted_data["price_max"] = numeric_value * 1_000_000
+            except ValueError:
+                pass
+        elif "million" not in normalized_text:
+            large_numbers = re.findall(r"\b(\d{6,10})\b", normalized_text)
+            if large_numbers:
+                extracted_data["price_max"] = float(large_numbers[0])
 
     # 3. Property Type categorization
     if "apart" in normalized_text or "flat" in normalized_text:
@@ -322,9 +348,13 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         discussion_context["property_ids"] = resolved_reference_ids
     
     if detected_intent == "search":
-        # Search queries must have at least these three fields to execute cleanly
-        critical_search_fields = ["town", "property_type", "category"]
-        missing_required_fields = [field for field in critical_search_fields if field not in merged_filters]
+        has_location = any(merged_filters.get(k) for k in ("town", "district", "subdistrict"))
+        missing_required_fields = []
+        if not has_location:
+            missing_required_fields.append("location")
+        for field in ("property_type", "category"):
+            if field not in merged_filters:
+                missing_required_fields.append(field)
     elif detected_intent == "book":
         # Consolidate date fields for the downstream Booking Engine
         if "preferred_date" in merged_booking_details and "date" not in merged_booking_details:
@@ -346,7 +376,13 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             missing_required_fields = []
     if dialogue_act == "refine_search":
         detected_intent = "search"
-        missing_required_fields = [field for field in ["town", "property_type", "category"] if field not in merged_filters]
+        has_location = any(merged_filters.get(k) for k in ("town", "district", "subdistrict"))
+        missing_required_fields = []
+        if not has_location:
+            missing_required_fields.append("location")
+        for field in ("property_type", "category"):
+            if field not in merged_filters:
+                missing_required_fields.append(field)
 
     response_mode = "tool_required"
     if missing_required_fields:
