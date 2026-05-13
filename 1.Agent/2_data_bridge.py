@@ -83,8 +83,8 @@ class DataBridge:
             
             # Format the raw stats into a clean, human-readable context block
             return insight_builder.LLMContextBuilder.prepare_fair_price_context(fair_price_estimation_result)
-        except Exception as e:
-            return f"[ANALYSIS_SKIP] {str(e)}"
+        except Exception:
+            return ""  # Silently skip — never expose analysis errors to the LLM prompt
 
     @staticmethod
     def resolve_location(location_name: str) -> dict:
@@ -188,10 +188,10 @@ class DataBridge:
                 return context_builder.prepare_market_pulse_context(data)
             elif analysis_type == "segment_report":
                 return context_builder.prepare_segment_report_context(data)
-        except Exception as e:
-            return f"[ANALYSIS_ERROR] {str(e)}"
-        
-        return "No analysis context generated."
+        except Exception:
+            return ""  # Silently skip
+
+        return ""  # No matching analysis type — return empty, not an error string
 
 if __name__ == "__main__":
     # Test execution block to verify fuzzy matching logic locally
