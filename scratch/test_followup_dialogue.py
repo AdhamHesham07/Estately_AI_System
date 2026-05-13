@@ -6,6 +6,12 @@ from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "1.Agent"))
 
 build_agent_graph = importlib.import_module("4_graph_builder").build_agent_graph
