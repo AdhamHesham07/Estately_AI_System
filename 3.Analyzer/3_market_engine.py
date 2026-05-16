@@ -205,8 +205,15 @@ class MarketPulse:
     calculating total volumes, medians, and liquidity velocity.
     """
     @staticmethod
-    def get_snapshot() -> dict:
+    def get_snapshot(filters: dict = None) -> dict:
         global_dataframe = get_clean_data_contract()
+        
+        # Apply user-wise filters if provided
+        if filters:
+            if filters.get('town'):
+                global_dataframe = global_dataframe[global_dataframe['town'].str.lower() == filters['town'].lower()]
+            if filters.get('property_type'):
+                global_dataframe = global_dataframe[global_dataframe['property_type'].str.lower() == filters['property_type'].lower()]
         
         buyers_market_dataframe = global_dataframe[global_dataframe['category'] == 'buy']
         renters_market_dataframe = global_dataframe[global_dataframe['category'] == 'rent']

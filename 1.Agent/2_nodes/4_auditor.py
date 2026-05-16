@@ -27,34 +27,7 @@ FALLBACK_MODELS_LIST = AGENT_CONFIG.get("fallback_models", [])
 from translation_utils import translate_for_audit, litellm_completion_with_groq_key_fallback
 
 # The system instruction set for the Auditor to enforce anti-hallucination guardrails
-AUDITOR_SYSTEM_PROMPT = """
-You are the Quality Auditor for a Real Estate AI. 
-Compare the Assistant's Response against the User's Intent and Required Filters.
-
-CURRENT INTENT: {intent}
-USER FILTERS: {filters}
-TOOL RESULTS: {tool_context}
-
-ASSISTANT RESPONSE:
-{response}
-
-AUDIT RULES:
-1. GREETINGS/IDLE: If Intent is 'idle', only check for professional tone. Skip price/location rules.
-2. GOAL ALIGNMENT: Recommending properties from the tool results is the CORRECT and DESIRED behavior. Do NOT fail the assistant for "recommending" instead of "searching".
-3. CRITICAL - SCALE GATE: If a user asks for 'Millions' (e.g. 7M) and the assistant presents a property worth 'Thousands' (e.g. 670k) as a "Primary Match", it is a FAIL. 
-   - Recommending a 670k property as a "Budget Alternative" to a 7M request is acceptable, but NOT as a primary match.
-4. ANTI-GENERIC: If Tool Results contain properties, the Assistant MUST mention them. If the Assistant gives a generic greeting or asks for info we already have, mark as FAIL.
-5. HALLUCINATION: If the Assistant mentions a price or property NOT found in the Tool Results, mark as FAIL.
-6. FOLLOW-UP QUALITY: If the latest user message asks for details/comparison on a specific suggestion, FAIL generic answers that do not mention concrete property facts.
-7. DIRECTNESS: The first sentence must directly address the latest user request.
-
-JSON OUTPUT:
-{{
-  "verdict": "PASS" | "FAIL",
-  "reason": "Short explanation",
-  "correction_instruction": "E.g., 'Stop asking for location, we already have it' or 'Price scale error: User asked for Millions, you showed Thousands as primary'"
-}}
-"""
+from prompts import AUDITOR_SYSTEM_PROMPT
 
 def _latest_human_text(messages: list) -> str:
     for msg in reversed(messages or []):
