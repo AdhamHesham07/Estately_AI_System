@@ -11,127 +11,144 @@ get_global_clean_data = ingestion_adapter.get_ingested_catalog
 
 class PreferenceEngine:
     """
-    LAYER 2: PREFERENCE-AWARE ANALYTICS
-    Unlike the General Market Engine (which looks at the whole city), this engine 
-    specifically consumes the Recommender's Top Candidate pool to generate 
-    hyper-personalized insights for the specific user's exact preferences.
+    LAYER 2: PREFERENCE-AWARE ANALYTICS (The "Master Strategist")
+    Evaluates user constraints against market reality and identifies highly sophisticated 
+    qualitative compromises or opportunity highlights before the recommender runs.
     """
     
     @staticmethod
     def _normalize_string(string_value) -> str:
         """Helper to safely lower and strip strings for pandas boolean masking."""
+        if not string_value:
+            return ""
         return str(string_value).strip().lower()
 
     @staticmethod
-    def load_candidate_contract() -> dict:
+    def evaluate_tradeoffs(filters: dict) -> dict:
         """
-        Reads the personalized candidate list exported by the Recommender module.
-        This allows the Analyzer to know exactly what the user is currently looking at.
+        The multi-scenario decision tree.
+        Analyzes the user's constraints and suggests strategic pivots based on the current market depth.
         """
-        candidate_contract_path = os.path.join(ANALYZER_CONFIG["paths"]["contracts_dir"], "Rec_To_Ana_Candidates.json")
+        global_db = get_global_clean_data()
+        
+        target_category = PreferenceEngine._normalize_string(filters.get('category', 'buy'))
+        target_town = PreferenceEngine._normalize_string(filters.get('town', ''))
+        target_property_type = PreferenceEngine._normalize_string(filters.get('property_type', ''))
+        
         try:
-            with open(candidate_contract_path, 'r') as file_handler:
-                return json.load(file_handler)
-        except FileNotFoundError:
-            return None
-
-    @staticmethod
-    def generate_segment_report() -> dict:
-        """
-        2.1 "Your Market" Segment Report
-        Treats the Recommender's candidate pool as the user's "personal micro-market", 
-        calculating medians and ranges specifically for the properties they were just recommended.
-        """
-        candidate_payload = PreferenceEngine.load_candidate_contract()
-        if not candidate_payload:
-            return {"status": "error", "message": "No candidate contract found."}
+            target_bedrooms = int(filters.get('bedrooms', 0)) if filters.get('bedrooms') else 0
+        except ValueError:
+            target_bedrooms = 0
             
-        user_query_context = candidate_payload['query']
-        recommended_candidates_dataframe = pd.DataFrame(candidate_payload['candidates'])
-        
-        if len(recommended_candidates_dataframe) == 0:
-            return {"status": "error", "message": "No candidates provided by Recommender."}
+        try:
+            target_budget = float(filters.get('price_max', filters.get('price_egp', 0)))
+        except ValueError:
+            target_budget = 0.0
             
-        segment_report = {
-            "query_context": user_query_context,
-            "segment_size": len(recommended_candidates_dataframe),
-            "stats": {
-                "median_price": float(recommended_candidates_dataframe['price_egp'].median()),
-                "price_range": [float(recommended_candidates_dataframe['price_egp'].min()), float(recommended_candidates_dataframe['price_egp'].max())],
-                "avg_price_per_sqm": float(recommended_candidates_dataframe['price_sqft'].median() * 10.764) if 'price_sqft' in recommended_candidates_dataframe else None,
-                "avg_area": float(recommended_candidates_dataframe['area_value'].mean()),
-                "completion_mix": recommended_candidates_dataframe['completion_status'].value_counts(normalize=True).apply(lambda percentage: round(percentage*100, 1)).to_dict(),
-                "payment_mix": recommended_candidates_dataframe['payment_method'].value_counts(normalize=True).apply(lambda percentage: round(percentage*100, 1)).to_dict()
-            }
-        }
-        return {"status": "success", "report": segment_report}
-
-    @staticmethod
-    def generate_tradeoff_advisor() -> dict:
-        """
-        2.3 Trade-off Advisor
-        Looks at the global catalog to tell the user what would happen if they 
-        relaxed certain constraints (e.g., "If you increase your budget by 20%, 
-        you unlock 50 more properties").
-        """
-        candidate_payload = PreferenceEngine.load_candidate_contract()
-        if not candidate_payload:
-            return {"status": "error", "message": "No candidate contract found."}
+        # 1. Build Base Masks
+        base_mask = (global_db['category'].astype(str).str.lower() == target_category)
+        if target_town:
+            base_mask = base_mask & (global_db['town'].astype(str).str.lower() == target_town)
+        if target_property_type:
+            base_mask = base_mask & (global_db['property_type'].astype(str).str.lower() == target_property_type)
             
-        user_query_dictionary = candidate_payload['query']
-        global_database_dataframe = get_global_clean_data()
-        
-        current_exact_matches_count = len(candidate_payload['candidates'])
-        
-        # Safely extract and normalize the user's current constraints
-        target_category = PreferenceEngine._normalize_string(user_query_dictionary.get('category', ''))
-        target_town = PreferenceEngine._normalize_string(user_query_dictionary.get('town', ''))
-        target_property_type = PreferenceEngine._normalize_string(user_query_dictionary.get('property_type', ''))
-        target_bedrooms = user_query_dictionary.get('bedrooms')
-        target_budget = user_query_dictionary.get('price_egp', user_query_dictionary.get('price_max', 0))
-        
-        # Scenario 1: What if the user increases their budget by 20%?
-        budget_increase_threshold = target_budget * 1.2
-        base_market_mask = (
-            (global_database_dataframe['category'].astype(str).str.lower() == target_category) & 
-            (global_database_dataframe['town'].astype(str).str.lower() == target_town) & 
-            (global_database_dataframe['property_type'].astype(str).str.lower() == target_property_type) &
-            (global_database_dataframe['bedrooms'] == target_bedrooms)
-        )
-        
-        original_budget_mask = base_market_mask & (global_database_dataframe['price_egp'] <= target_budget)
-        increased_budget_mask = base_market_mask & (global_database_dataframe['price_egp'] <= budget_increase_threshold)
-        
-        catalog_original_matches_count = len(global_database_dataframe[original_budget_mask])
-        catalog_new_matches_count = len(global_database_dataframe[increased_budget_mask])
-        
+        # Exact Matches
+        exact_mask = base_mask.copy()
+        if target_bedrooms > 0:
+            exact_mask = exact_mask & (global_db['bedrooms'] == target_bedrooms)
+        if target_budget > 0:
+            exact_mask = exact_mask & (global_db['price_egp'] <= target_budget)
+            
+        exact_matches_count = len(global_db[exact_mask])
         suggested_adjustments = []
-        if catalog_new_matches_count > catalog_original_matches_count:
-            suggested_adjustments.append({
-                "change": f"Increase budget by 20% (to {budget_increase_threshold:,.0f} EGP)",
-                "new_matches": catalog_new_matches_count,
-                "delta": f"+{catalog_new_matches_count - catalog_original_matches_count} properties"
-            })
-            
-        # Scenario 2: What if the user drops the strict bedroom requirement?
-        flexible_beds_mask = (
-            (global_database_dataframe['category'].astype(str).str.lower() == target_category) & 
-            (global_database_dataframe['town'].astype(str).str.lower() == target_town) & 
-            (global_database_dataframe['property_type'].astype(str).str.lower() == target_property_type) &
-            (global_database_dataframe['price_egp'] <= target_budget)
-        )
         
-        flexible_beds_count = len(global_database_dataframe[flexible_beds_mask])
-        if flexible_beds_count > catalog_original_matches_count:
+        # --- SCENARIO A: PRICED OUT OR TOO RESTRICTIVE (0-2 Matches) ---
+        if exact_matches_count <= 2:
+            # Tactic 1: Budget Expansion
+            if target_budget > 0:
+                budget_boost = target_budget * 1.3  # 30% increase
+                boost_mask = base_mask & (global_db['price_egp'] <= budget_boost)
+                if target_bedrooms > 0:
+                    boost_mask = boost_mask & (global_db['bedrooms'] == target_bedrooms)
+                boost_count = len(global_db[boost_mask])
+                if boost_count > exact_matches_count:
+                    suggested_adjustments.append({
+                        "strategy": "Budget Expansion",
+                        "change": f"Increase budget by 30% (to {budget_boost:,.0f} EGP)",
+                        "delta": f"+{boost_count - exact_matches_count} high-quality options unlocked."
+                    })
+            
+            # Tactic 2: Location Shift (Emerging Markets)
+            if target_town == "new cairo city" and target_budget > 0:
+                alt_mask = (global_db['category'].astype(str).str.lower() == target_category) & \
+                           (global_db['town'].astype(str).str.lower() == "mostakbal city") & \
+                           (global_db['price_egp'] <= target_budget)
+                if target_bedrooms > 0:
+                    alt_mask = alt_mask & (global_db['bedrooms'] == target_bedrooms)
+                alt_count = len(global_db[alt_mask])
+                if alt_count > exact_matches_count:
+                    suggested_adjustments.append({
+                        "strategy": "Location Pivot",
+                        "change": "Shift focus to Mostakbal City (adjacent to New Cairo)",
+                        "delta": f"Provides {alt_count} excellent options within your current budget."
+                    })
+                    
+            # Tactic 3: Property Type Shift (Downsizing)
+            if target_property_type == "villa" and target_budget > 0:
+                type_mask = (global_db['category'].astype(str).str.lower() == target_category) & \
+                            (global_db['property_type'].astype(str).str.lower().isin(['townhouse', 'twinhouse'])) & \
+                            (global_db['price_egp'] <= target_budget)
+                if target_town:
+                    type_mask = type_mask & (global_db['town'].astype(str).str.lower() == target_town)
+                type_count = len(global_db[type_mask])
+                if type_count > exact_matches_count:
+                    suggested_adjustments.append({
+                        "strategy": "Property Type Pivot",
+                        "change": "Consider a Townhouse or Twinhouse instead of a Standalone Villa",
+                        "delta": f"Unlocks {type_count} premium properties without breaking the budget."
+                    })
+                    
+            # Tactic 4: Completion Status Shift (Off-Plan)
+            if target_budget > 0:
+                offplan_mask = base_mask & (global_db['price_egp'] <= target_budget) & \
+                               (global_db['completion_status'].astype(str).str.lower() == 'under construction')
+                offplan_count = len(global_db[offplan_mask])
+                if offplan_count > exact_matches_count:
+                    suggested_adjustments.append({
+                        "strategy": "Investment Strategy Shift",
+                        "change": "Focus on Off-Plan properties with extended installment plans (7-10 years)",
+                        "delta": f"Reveals {offplan_count} developer-direct opportunities."
+                    })
+
+        # --- SCENARIO B: TIGHT MARKET (3-10 Matches) ---
+        elif exact_matches_count <= 10:
+            if target_bedrooms > 2:
+                flex_beds_mask = base_mask & (global_db['bedrooms'] >= (target_bedrooms - 1))
+                if target_budget > 0:
+                    flex_beds_mask = flex_beds_mask & (global_db['price_egp'] <= target_budget)
+                flex_count = len(global_db[flex_beds_mask])
+                if flex_count > exact_matches_count:
+                    suggested_adjustments.append({
+                        "strategy": "Bedroom Flexibility",
+                        "change": f"Be open to {target_bedrooms - 1} bedrooms",
+                        "delta": f"Expands your options to {flex_count} properties."
+                    })
+
+        # --- SCENARIO C: SPOILED FOR CHOICE (15+ Matches) ---
+        elif exact_matches_count > 15:
             suggested_adjustments.append({
-                "change": "Be flexible on bedroom count",
-                "new_matches": flexible_beds_count,
-                "delta": f"+{flexible_beds_count - catalog_original_matches_count} properties"
+                "strategy": "Premium Filtering",
+                "change": "You have a massive abundance of options in this bracket.",
+                "delta": "I highly recommend filtering by Tier-1 developers (like Emaar, SODIC, Palm Hills) or focusing purely on Ready-to-Move options to narrow down the absolute best investments."
             })
             
         return {
             "status": "success",
-            "current_matches": current_exact_matches_count,
-            "catalog_exact_matches": catalog_original_matches_count,
+            "catalog_exact_matches": exact_matches_count,
             "adjustments": suggested_adjustments
         }
+        
+    @staticmethod
+    def generate_tradeoff_advisor(filters: dict = None) -> dict:
+        """Alias for DataBridge compatibility."""
+        return PreferenceEngine.evaluate_tradeoffs(filters or {})

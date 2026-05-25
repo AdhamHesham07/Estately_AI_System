@@ -78,6 +78,15 @@ class QueryAdapter:
         }
         return _LOADED_MODELS_CACHE
 
+    @staticmethod
+    def _primary_location_token(query: dict) -> str:
+        """Prefer finest-grained location for filtering (town / district / subdistrict columns)."""
+        for key in ("subdistrict", "district", "town"):
+            val = query.get(key)
+            if val:
+                return str(val).strip().lower()
+        return ""
+
     @classmethod
     def _create_synthetic_query_row(cls, query: dict, training_data: pd.DataFrame) -> pd.Series:
         """
@@ -85,17 +94,17 @@ class QueryAdapter:
         like a real property listing, so we can calculate feature differences.
         Uses Smart Imputation based on context, rather than global medians.
         """
-        target_town = str(query.get('town', '')).lower()
+        location_token = QueryAdapter._primary_location_token(query)
         target_city = str(query.get('city', '')).lower()
         target_types = [t.strip().lower() for t in str(query.get('property_type', 'Apartment')).split(',')]
         
         # Smart Imputation: Filter training data contextually
         location_filtered_data = pd.DataFrame()
-        if target_town:
+        if location_token:
             location_filtered_data = training_data[
-                (training_data['town'].fillna('').astype(str).str.lower() == target_town) |
-                (training_data['district'].fillna('').astype(str).str.lower() == target_town) |
-                (training_data['subdistrict'].fillna('').astype(str).str.lower() == target_town)
+                (training_data['town'].fillna('').astype(str).str.lower() == location_token) |
+                (training_data['district'].fillna('').astype(str).str.lower() == location_token) |
+                (training_data['subdistrict'].fillna('').astype(str).str.lower() == location_token)
             ].copy()
             
         if location_filtered_data.empty and target_city:
@@ -109,7 +118,13 @@ class QueryAdapter:
         imputation_source = type_filtered_data if not type_filtered_data.empty else location_filtered_data
             
         imputation_source.loc[:, 'price_egp'] = pd.to_numeric(imputation_source['price_egp'], errors='coerce')
-        target_price = query.get('price_egp') or query.get('price_max') or imputation_source['price_egp'].median()
+        if query.get('price_min') is not None and query.get('price_max') is not None:
+            try:
+                target_price = (float(query['price_min']) + float(query['price_max'])) / 2.0
+            except (TypeError, ValueError):
+                target_price = query.get('price_egp') or query.get('price_max') or imputation_source['price_egp'].median()
+        else:
+            target_price = query.get('price_egp') or query.get('price_max') or imputation_source['price_egp'].median()
         
         # Financial Anchor Imputation for Area
         if query.get('area_value'):
@@ -154,7 +169,8 @@ class QueryAdapter:
         # Build description without poisoning missing locations
         luxury_prefix = "Exclusive Luxury " if target_price >= 10000000 else ""
         amenities_str = ", ".join(query.get('amenities', []))
-        location_string = ", ".join(filter(None, [synthetic_listing_data['town'], synthetic_listing_data['city']]))
+        location_bits = [query.get('subdistrict'), query.get('district'), query.get('town'), query.get('city')]
+        location_string = ", ".join([str(x) for x in location_bits if x])
         location_clause = f" in {location_string}" if location_string else ""
         
         generated_description = (
@@ -173,17 +189,18 @@ class QueryAdapter:
         Processes a user query and returns the ranked results as a dictionary.
         This is thread-safe as it returns data in memory.
         """
+        primary_location = QueryAdapter._primary_location_token(query)
         logger.info(
-            "Processing query with keys=%s, has_town=%s, has_city=%s",
+            "Processing query with keys=%s, primary_location=%s, has_city=%s",
             sorted(list(query.keys())),
-            bool(query.get("town")),
-            bool(query.get("city"))
+            primary_location or "",
+            bool(query.get("city")),
         )
         loaded_models = QueryAdapter._load_models()
         
         # Strict Core-Feature Guardrails (The Rejection Policy)
-        has_location = bool(query.get('town') or query.get('city'))
-        has_budget = bool(query.get('price_egp') or query.get('price_max'))
+        has_location = bool(primary_location or query.get('city'))
+        has_budget = bool(query.get('price_egp') or query.get('price_max') or query.get('price_min'))
         has_intent = bool(query.get('category'))
         
         if not (has_location and has_budget and has_intent):
@@ -207,7 +224,7 @@ class QueryAdapter:
         semantic_candidate_indices = [int(x) for x in retrieved_candidate_ids[0] if x >= 0]
         
         # 1b. Geographic Exploration
-        target_location = str(query.get('town', '')).lower()
+        target_location = primary_location
         target_city = str(query.get('city', '')).lower()
         
         geographic_candidate_pool = pd.DataFrame()
@@ -289,16 +306,26 @@ class QueryAdapter:
         target_category = str(query.get('category', 'buy')).lower()
         candidate_properties = candidate_properties[candidate_properties['category'].fillna('unknown').astype(str).str.lower() == target_category]
         
-        # 3. Budget Consideration (Strict +/- 10% Guardrail)
-        # To prevent "millions of difference", we enforce a hard limit around the target.
-        if query.get('price_max'):
+        # 3. Budget Consideration
+        candidate_properties['price_egp'] = pd.to_numeric(candidate_properties['price_egp'], errors='coerce')
+        if query.get('price_min') is not None and query.get('price_max') is not None:
+            try:
+                budget_lo = float(query['price_min'])
+                budget_hi = float(query['price_max'])
+                candidate_properties = candidate_properties[
+                    (candidate_properties['price_egp'] >= budget_lo * 0.98)
+                    & (candidate_properties['price_egp'] <= budget_hi * 1.02)
+                ]
+            except Exception:
+                pass
+        elif query.get('price_max'):
             try:
                 maximum_budget = float(query['price_max'])
                 budget_lower_bound = maximum_budget * 0.90
                 budget_upper_bound = maximum_budget * 1.10
-                candidate_properties['price_egp'] = pd.to_numeric(candidate_properties['price_egp'], errors='coerce')
                 candidate_properties = candidate_properties[(candidate_properties['price_egp'] >= budget_lower_bound) & (candidate_properties['price_egp'] <= budget_upper_bound)]
-            except: pass
+            except Exception:
+                pass
             
         if candidate_properties.empty:
             logger.warning(f"No candidates left after strict price filtering for {target_location}")
@@ -353,7 +380,7 @@ class QueryAdapter:
     @staticmethod
     def _format_output(candidates, is_vague: bool = False, message: str = "") -> dict:
         """Formats the dataframe to the JSON Data Contract structure."""
-        export_columns = ['listing_id', 'price_egp', 'area_value', 'price_sqft', 'town', 'completion_status', 'payment_method', 'bedrooms', 'relevance_score']
+        export_columns = ['listing_id', 'price_egp', 'area_value', 'price_sqft', 'town', 'district', 'subdistrict', 'completion_status', 'payment_method', 'bedrooms', 'relevance_score']
         
         if len(candidates) > 0:
             available_columns = [col for col in export_columns if col in candidates.columns]

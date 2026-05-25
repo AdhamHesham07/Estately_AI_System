@@ -13,7 +13,7 @@ class LLMContextBuilder:
     def prepare_fair_price_context(analytical_result: dict) -> str:
         """Transforms the mathematical Fair Price dictionary into a readable LLM context block."""
         if analytical_result['status'] != 'success':
-            return f"[FAIR_PRICE_ERROR] {analytical_result.get('message', 'Unknown error.')}"
+            return ""  # Silently skip — never expose data errors to the LLM prompt
             
         market_stats = analytical_result['market_stats']
         user_query = analytical_result['query']
@@ -35,7 +35,7 @@ class LLMContextBuilder:
     def prepare_investment_context(analytical_result: dict) -> str:
         """Formats the list of identified investment gems for LLM injection."""
         if analytical_result['status'] != 'success':
-            return f"[INVESTMENT_ERROR] {analytical_result.get('message', 'Unknown error.')}"
+            return ""  # Silently skip
             
         context_payload = "[INVESTMENT_SCOUTER_CONTEXT]\n"
         context_payload += f"- Market Median for Area: {analytical_result['market_median']:,.0f} EGP\n"
@@ -71,7 +71,7 @@ class LLMContextBuilder:
     def prepare_segment_report_context(report_data: dict) -> str:
         """Transforms the Personal Segment Report data into an LLM context block."""
         if report_data['status'] != 'success':
-            return f"[SEGMENT_REPORT_ERROR] {report_data.get('message', 'Unknown error.')}"
+            return ""  # Silently skip
             
         report_dictionary = report_data['report']
         segment_stats = report_dictionary['stats']
@@ -98,7 +98,7 @@ class LLMContextBuilder:
     def prepare_tradeoff_context(tradeoff_data: dict) -> str:
         """Transforms the Trade-off Advisor data into an LLM context block."""
         if tradeoff_data['status'] != 'success':
-            return f"[TRADEOFF_ERROR] {tradeoff_data.get('message', 'Unknown error.')}"
+            return ""  # Silently skip
             
         context_payload = f"[TRADEOFF_ADVISOR_CONTEXT]\n"
         context_payload += f"- Current Exact Matches: {tradeoff_data['current_matches']}\n"

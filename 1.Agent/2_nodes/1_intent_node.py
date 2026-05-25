@@ -29,90 +29,9 @@ from translation_utils import build_english_history, contains_arabic, translate_
 PRIMARY_MODEL = AGENT_CONFIG["model"]
 FALLBACK_MODELS_LIST = AGENT_CONFIG.get("fallback_models", [])
 
-# Template for the Intent Extraction Prompt: Used to instruct the LLM on how to parse user queries
-INTENT_EXTRACTION_PROMPT = """
-You are the AI Brain of an Elite Real Estate Concierge. 
-Extract user requirements from the history into structured JSON.
+from prompts import INTENT_EXTRACTION_PROMPT
 
-EXTRACT:
-- intent: 'search', 'analyze', 'book', 'discussion', or 'idle'.
-- filters: { "category": "buy"|"rent", "town": string, "bedrooms": int, "property_type": string, "price_max": float, "price_min": float }
-- booking_info: { "property_id": string, "user_name": string, "phone": string, "date": string }
-- discussion_context: { "property_ids": [string], "comparison_properties": [string], "question_type": "comparison"|"details"|"opinion"|"general" }
-- confidence: 0.0 to 1.0
-- out_of_domain: true if user is talking about something unrelated to real estate.
-
-RULE: "Examine", "Visit", "See in person", "Book", or "Appointment" = intent 'book'.
-RULE: "Which is better", "Compare", "Difference", "vs", "Tell me more", "What about", "Pros and cons" = intent 'discussion'.
-RULE: "Your opinion", "What do you think", "Should I", "Recommendation", "Better choice" = intent 'discussion'.
-RULE: CONTEXT RESOLUTION - If the user says "the first one", "the second one", "that villa", or "property #123", look at the IDs (e.g., Listing ID 11225) mentioned in the previous AI message and put that ID into discussion_context.property_ids or booking_info.property_id.
-RULE: "7 million" = 7,000,000. "700k" = 700,000. Be extremely careful with zeros.
-RULE: If the user says "I want to see properties in Zayed", intent is 'search'.
-RULE: If the user asks "How is the market in New Cairo?", intent is 'analyze'.
-RULE: If the user mentions rent/monthly/per month/lease, set filters.category to "rent".
-RULE: If the user mentions buy/purchase/own/for sale/sell, set filters.category to "buy".
-RULE: When both appear, prioritize the latest explicit user request in the history.
-"""
-
-def infer_transaction_category(conversation_history_text: str) -> str:
-    """
-    Fallback category detector to harden rent vs buy extraction.
-    Searches the conversation history for explicit transactional keywords and deduces intent based on proximity.
-    """
-    normalized_text = (conversation_history_text or "").lower()
-    rent_keywords = [" rent ", " rental ", " monthly ", " per month ", " lease "]
-    buy_keywords = [" buy ", " purchase ", " own ", " for sale ", " sell ", " sale "]
-
-    last_rent_index = max((normalized_text.rfind(token) for token in rent_keywords), default=-1)
-    last_buy_index = max((normalized_text.rfind(token) for token in buy_keywords), default=-1)
-    
-    if last_rent_index == -1 and last_buy_index == -1:
-        return None
-    return "rent" if last_rent_index > last_buy_index else "buy"
-
-def extract_entities_via_regex(user_text: str) -> dict:
-    """
-    Regex-based safety net for critical real estate entities.
-    Used to catch explicit inputs that the LLM might hallucinate or miss during JSON extraction.
-    """
-    extracted_data = {}
-    normalized_text = user_text.lower()
-    
-    # 1. Location Detection (Common Areas): Maps slang to canonical database names
-    common_locations_map = {
-        "maadi": ["maadi", "madi"],
-        "zayed": ["zayed", "sheikh zayed", "october"],
-        "tagamoa": ["tagamoa", "new cairo", "fifth settlement"],
-        "shorouk": ["shorouk", "shorok"],
-        "heliopolis": ["heliopolis", "masr el gdida"]
-    }
-    
-    for standard_location, trigger_tokens in common_locations_map.items():
-        if any(token in normalized_text for token in trigger_tokens):
-            extracted_data["town"] = standard_location.capitalize()
-            break
-            
-    # 2. Price Detection (Looking for textual shorthand like '7 million', '7M', etc.)
-    price_pattern_match = re.search(r"(\d+(?:\.\d+)?)\s*(million|m|mln)", normalized_text)
-    if price_pattern_match:
-        try:
-            numeric_value = float(price_pattern_match.group(1))
-            extracted_data["price_max"] = numeric_value * 1_000_000
-        except ValueError:
-            pass
-    elif "million" not in normalized_text:
-        # Check for raw numbers > 100k assuming they are budgets
-        large_numbers = re.findall(r"\b(\d{6,10})\b", normalized_text)
-        if large_numbers:
-            extracted_data["price_max"] = float(large_numbers[0])
-
-    # 3. Property Type categorization
-    if "apart" in normalized_text or "flat" in normalized_text:
-        extracted_data["property_type"] = "Apartment"
-    elif "villa" in normalized_text or "townhouse" in normalized_text:
-        extracted_data["property_type"] = "Villa"
-        
-    return extracted_data
+from entity_extractor import infer_transaction_category, extract_entities_via_regex, detect_dialogue_act, extract_property_refs
 
 def intent_node(current_state: AgentState) -> Dict[str, Any]:
     """
@@ -122,10 +41,29 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     """
     # 1. Prepare conversation history for the LLM context window
     conversation_messages = current_state.get("messages", [])
-    latest_user_message = conversation_messages[-1].content if conversation_messages else ""
-    history_contains_arabic = any(contains_arabic(getattr(msg, "content", "")) for msg in conversation_messages)
-    formatted_history_string = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in conversation_messages])
-    history_for_llm = build_english_history(conversation_messages) if history_contains_arabic else formatted_history_string
+
+    # Important: During auditor retry loops, trailing AI draft messages can appear at the end.
+    # Always anchor extraction on the latest human message only.
+    latest_user_index = None
+    for idx in range(len(conversation_messages) - 1, -1, -1):
+        if getattr(conversation_messages[idx], "type", "") == "human":
+            latest_user_index = idx
+            break
+
+    latest_user_message = (
+        conversation_messages[latest_user_index].content
+        if latest_user_index is not None
+        else ""
+    )
+    messages_for_intent = (
+        conversation_messages[: latest_user_index + 1]
+        if latest_user_index is not None
+        else conversation_messages
+    )
+
+    history_contains_arabic = any(contains_arabic(getattr(msg, "content", "")) for msg in messages_for_intent)
+    formatted_history_string = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in messages_for_intent])
+    history_for_llm = build_english_history(messages_for_intent) if history_contains_arabic else formatted_history_string
     latest_user_message_for_regex = translate_to_english(latest_user_message) if contains_arabic(latest_user_message) else latest_user_message
     user_language = "ar-EG" if contains_arabic(latest_user_message) else "en"
     
@@ -166,6 +104,8 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             # Clean markdown code blocks from the JSON
             cleaned_json_string = raw_llm_content.replace("```json", "").replace("```", "").strip()
             extracted_json_data = json.loads(cleaned_json_string)
+            if not isinstance(extracted_json_data, dict):
+                raise ValueError("LLM did not return a JSON object (dictionary).")
             last_encountered_error = None
             break  # Success
             
@@ -194,7 +134,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             extracted_json_data = {"intent": "idle", "filters": {}, "confidence": 0.0, "out_of_domain": False}
     
     # 5. Merge state updates intelligently (Preserve existing filters while overriding new ones)
-    merged_filters = current_state.get("current_filters", {}).copy()
+    merged_filters = (current_state.get("current_filters") or {}).copy()
     llm_extracted_filters = extracted_json_data.get("filters") or {}
     
     # SAFETY NET: Run hardened regex extraction on the most recent user message
@@ -227,7 +167,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         merged_filters["property_type"] = "Apartment,Villa"
             
     # Expert Logic: Handle Bookings by merging partial details across turns
-    merged_booking_details = current_state.get("booking_details", {}).copy()
+    merged_booking_details = (current_state.get("booking_details") or {}).copy()
     llm_extracted_booking = extracted_json_data.get("booking_info") or {}
     for booking_key, booking_value in llm_extracted_booking.items():
         if booking_value:
@@ -237,11 +177,46 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     missing_required_fields = []
     detected_intent = extracted_json_data.get("intent", "idle")
     discussion_context = extracted_json_data.get("discussion_context", {})
+    dialogue_act = detect_dialogue_act(latest_user_message_for_regex)
+    target_property_refs = extract_property_refs(latest_user_message_for_regex)
+    previous_reference_map = current_state.get("reference_map", {}) or {}
+    previous_focus_listing_id = current_state.get("focus_listing_id")
+    slot_updates = {
+        k: v for k, v in llm_extracted_filters.items() if v is not None and v != ""
+    }
+    carry_forward_slots = merged_filters.copy()
+
+    # Build fresh ordinal map from recent properties whenever available.
+    recent_properties = current_state.get("recent_properties", []) or []
+    reference_map = previous_reference_map.copy()
+    if recent_properties:
+        reference_map = {}
+        for idx, prop in enumerate(recent_properties[:5], start=1):
+            listing_id = prop.get("listing_id")
+            if listing_id is not None:
+                reference_map[str(idx)] = str(listing_id)
+
+    resolved_reference_ids = []
+    for ref in target_property_refs:
+        if ref.get("kind") == "listing_id":
+            resolved_reference_ids.append(str(ref.get("value")))
+        elif ref.get("kind") == "ordinal":
+            resolved_from_ordinal = reference_map.get(str(ref.get("value")))
+            if resolved_from_ordinal:
+                resolved_reference_ids.append(str(resolved_from_ordinal))
+        elif ref.get("kind") == "pronoun" and previous_focus_listing_id:
+            resolved_reference_ids.append(str(previous_focus_listing_id))
+    if resolved_reference_ids:
+        discussion_context["property_ids"] = resolved_reference_ids
     
     if detected_intent == "search":
-        # Search queries must have at least these three fields to execute cleanly
-        critical_search_fields = ["town", "property_type", "category"]
-        missing_required_fields = [field for field in critical_search_fields if field not in merged_filters]
+        has_location = any(merged_filters.get(k) for k in ("town", "district", "subdistrict"))
+        missing_required_fields = []
+        if not has_location:
+            missing_required_fields.append("location")
+        for field in ("property_type", "category"):
+            if field not in merged_filters:
+                missing_required_fields.append(field)
     elif detected_intent == "book":
         # Consolidate date fields for the downstream Booking Engine
         if "preferred_date" in merged_booking_details and "date" not in merged_booking_details:
@@ -254,6 +229,38 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         # If no IDs mentioned, ask the user to specify
         if not discussion_context.get("property_ids"):
             missing_required_fields = ["property_reference"]  # Ask user which property they mean
+
+    # Deterministic policy overrides for user-friendly multi-turn behavior.
+    if dialogue_act in ["request_details", "compare"] and reference_map:
+        detected_intent = "discussion"
+        if not discussion_context.get("property_ids") and previous_focus_listing_id:
+            discussion_context["property_ids"] = [str(previous_focus_listing_id)]
+            missing_required_fields = []
+    if dialogue_act == "refine_search":
+        detected_intent = "search"
+        has_location = any(merged_filters.get(k) for k in ("town", "district", "subdistrict"))
+        missing_required_fields = []
+        if not has_location:
+            missing_required_fields.append("location")
+        for field in ("property_type", "category"):
+            if field not in merged_filters:
+                missing_required_fields.append(field)
+
+    response_mode = "tool_required"
+    if missing_required_fields:
+        response_mode = "clarify_needed"
+    elif detected_intent in ["discussion", "idle"] and dialogue_act in ["confirm", "chitchat"] and not discussion_context.get("property_ids"):
+        response_mode = "context_only"
+
+    focus_listing_id = previous_focus_listing_id
+    if discussion_context.get("property_ids"):
+        focus_listing_id = str(discussion_context["property_ids"][0])
+
+    dialogue_state = {
+        "last_dialogue_act": dialogue_act,
+        "pending_question": missing_required_fields[0] if missing_required_fields else None,
+        "turn_goal": detected_intent
+    }
     
     # Final Payload returned to the Graph State
     return {
@@ -265,5 +272,13 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         "is_out_of_domain": extracted_json_data.get("out_of_domain", False),
         "active_model": actual_model_used if last_encountered_error is None else target_llm_model,
         "user_language": user_language,
-        "discussion_context": discussion_context
+        "discussion_context": discussion_context,
+        "dialogue_state": dialogue_state,
+        "reference_map": reference_map,
+        "focus_listing_id": focus_listing_id,
+        "response_mode": response_mode,
+        "dialogue_act": dialogue_act,
+        "target_property_refs": target_property_refs,
+        "carry_forward_slots": carry_forward_slots,
+        "slot_updates": slot_updates
     }

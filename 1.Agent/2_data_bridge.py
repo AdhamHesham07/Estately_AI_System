@@ -83,8 +83,8 @@ class DataBridge:
             
             # Format the raw stats into a clean, human-readable context block
             return insight_builder.LLMContextBuilder.prepare_fair_price_context(fair_price_estimation_result)
-        except Exception as e:
-            return f"[ANALYSIS_SKIP] {str(e)}"
+        except Exception:
+            return ""  # Silently skip — never expose analysis errors to the LLM prompt
 
     @staticmethod
     def resolve_location(location_name: str) -> dict:
@@ -188,10 +188,45 @@ class DataBridge:
                 return context_builder.prepare_market_pulse_context(data)
             elif analysis_type == "segment_report":
                 return context_builder.prepare_segment_report_context(data)
+        except Exception:
+            return ""  # Silently skip
+
+        return ""  # No matching analysis type — return empty, not an error string
+
+    @staticmethod
+    def execute_analyzer_synthesis(user_query: str, current_filters: dict) -> str:
+        """
+        The Analyzer Hierarchy Shift: The Analyzer acts as the intelligence hub.
+        It intercepts the query, queries the RAG engine, checks Pandas, and evaluates tradeoffs,
+        then uses its own LLM to synthesize an analytical response.
+        """
+        try:
+            knowledge_engine = importlib.import_module("7_knowledge_engine")
+            analyzer_llm = importlib.import_module("8_analyzer_llm")
+            preference_engine = importlib.import_module("4_preference_engine")
+            
+            # 1. Qualitative Data
+            knowledge_context = knowledge_engine.KnowledgeEngine.retrieve_context(user_query)
+            
+            # 2. Quantitative Data
+            market_stats = market_engine.MarketPulse.get_snapshot(current_filters)
+            
+            # 3. Preference Data (Tradeoffs)
+            # The preference engine currently expects candidates to be generated, 
+            # so we'll grab what we can from it, or just use the current filters.
+            preference_data = preference_engine.PreferenceEngine.generate_tradeoff_advisor()
+            
+            # 4. Synthesize
+            synthesis = analyzer_llm.AnalyzerSynthesizer.synthesize_report(
+                user_query=user_query,
+                market_pulse_stats=market_stats,
+                knowledge_context=knowledge_context,
+                preference_data=preference_data.get('adjustments') if isinstance(preference_data, dict) and 'adjustments' in preference_data else {}
+            )
+            return synthesis
         except Exception as e:
-            return f"[ANALYSIS_ERROR] {str(e)}"
-        
-        return "No analysis context generated."
+            logger.error(f"Analyzer Synthesis failed: {e}")
+            return f"[Analysis System Error: {str(e)}]"
 
 if __name__ == "__main__":
     # Test execution block to verify fuzzy matching logic locally
