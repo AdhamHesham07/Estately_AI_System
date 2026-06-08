@@ -355,9 +355,9 @@ class QueryAdapter:
         top_embeddings = training_embeddings[top_embedding_indices]
         
         # 6. Determine if the query is "Vague" and Calculate Dynamic MMR Lambda
-        required_specific_features = ['bedrooms', 'bathrooms', 'area_value', 'amenities', 'completion_status']
+        required_specific_features = ['property_type', 'bedrooms', 'bathrooms', 'area_value', 'amenities', 'completion_status']
         missing_feature_count = sum(1 for feat in required_specific_features if not query.get(feat))
-        is_query_vague = missing_feature_count >= 3
+        is_query_vague = missing_feature_count >= 5
         
         # Dynamic Diversity: If highly specific (0 missing), lambda=0.95 (favor relevance). 
         # If highly vague (5 missing), lambda=0.5 (favor diversity).

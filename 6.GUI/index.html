@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estately — Discover Your Place in Egypt's Real Estate Future</title>
+  <meta name="description" content="Estately is Egypt's premier real estate platform. Find new projects, luxury villas, apartments, and verified agents across Cairo, New Cairo, Heliopolis, and beyond." />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Boxicons for icons -->
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- ===========================
+       1. NAVBAR
+       =========================== -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <!-- Logo -->
+        <a href="#" class="nav-logo" id="nav-logo">
+          <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 3L2 13H6V27H12V19H18V27H24V13H28L15 3Z" fill="#2563c4"/>
+            <path d="M15 3L2 13H6V27H12V19H18V27H24V13H28L15 3Z" fill="url(#logoGrad)" fill-opacity="0.2"/>
+            <defs>
+              <linearGradient id="logoGrad" x1="2" y1="3" x2="28" y2="27" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#60a5fa"/>
+                <stop offset="1" stop-color="#1a3560"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          Estately
+        </a>
+
+        <!-- Links -->
+        <ul class="nav-links">
+          <li><a href="#" class="active" id="nav-home">Home</a></li>
+          <li><a href="#explore" id="nav-projects">Projects</a></li>
+          <li><a href="#find-home" id="nav-about">About</a></li>
+          <li><a href="#testimonials" id="nav-agents">Agents</a></li>
+          <li><a href="#footer" id="nav-contact">Contact</a></li>
+        </ul>
+
+        <!-- Right side -->
+        <div class="nav-right">
+          <a href="#" class="nav-login" id="nav-login-link">Login</a>
+          <button class="btn-register" id="nav-register-btn">Register</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===========================
+       2. HERO
+       =========================== -->
+  <section class="hero" id="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-overlay"></div>
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <i class='bx bxs-map-pin'></i>
+          Egypt's #1 Real Estate Platform
+        </div>
+        <h1>Discover your place in <span>Egypt's</span> real estate future.</h1>
+        <p class="hero-sub">Find your perfect home from thousands of verified listings across Cairo, New Cairo, Heliopolis, and beyond.</p>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-box" id="search-box">
+        <div class="search-row-1">
+          <div class="search-field">
+            <label for="city-select">City</label>
+            <select id="city-select">
+              <option value="">Select City</option>
+              <option>Cairo</option>
+              <option>New Cairo</option>
+              <option>Giza</option>
+              <option>Alexandria</option>
+              <option>6th of October</option>
+              <option>Heliopolis</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label for="area-select">Area (m²)</label>
+            <select id="area-select">
+              <option value="">Any Area</option>
+              <option>50 – 100 m²</option>
+              <option>100 – 150 m²</option>
+              <option>150 – 250 m²</option>
+              <option>250 m²+</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label for="developer-select">Developer</label>
+            <select id="developer-select">
+              <option value="">All Developers</option>
+              <option>SODIC</option>
+              <option>Palm Hills</option>
+              <option>Emaar Misr</option>
+              <option>Tatweer Misr</option>
+              <option>Ora Developers</option>
+            </select>
+          </div>
+        </div>
+        <div class="search-row-2">
+          <div class="search-field">
+            <label for="type-select">Property Type</label>
+            <select id="type-select">
+              <option value="">Any Type</option>
+              <option>Apartment</option>
+              <option>Villa</option>
+              <option>Duplex</option>
+              <option>Penthouse</option>
+              <option>Studio</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label for="beds-select">Min Bedrooms</label>
+            <select id="beds-select">
+              <option value="">Any</option>
+              <option>1+ Bedroom</option>
+              <option>2+ Bedrooms</option>
+              <option>3+ Bedrooms</option>
+              <option>4+ Bedrooms</option>
+              <option>5+ Bedrooms</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label for="price-select">Price Range</label>
+            <select id="price-select">
+              <option value="">Any Price</option>
+              <option>Up to 2M EGP</option>
+              <option>2M – 5M EGP</option>
+              <option>5M – 10M EGP</option>
+              <option>10M – 20M EGP</option>
+              <option>20M+ EGP</option>
+            </select>
+          </div>
+          <button class="btn-search" id="search-btn">
+            <i class='bx bx-search-alt'></i>
+            Search
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===========================
+       3. AGENT VERIFY BANNER
+       =========================== -->
+  <section class="agent-verify" id="agent-verify">
+    <div class="container">
+      <h2>Ensure your representative is an Official Agent by checking their phone number below.</h2>
+      <a href="#" class="btn-verify" id="verify-agent-btn">
+        <i class='bx bx-shield-check'></i>
+        Verify Your Agent
+      </a>
+    </div>
+  </section>
+
+  <!-- ===========================
+       4. EXPLORE NEW PROJECTS
+       =========================== -->
+  <section class="explore" id="explore">
+    <div class="container">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Explore New Projects</h2>
+          <p class="section-subtitle">Handpicked premium properties from Egypt's top developers</p>
+        </div>
+        <div class="section-nav">
+          <button id="prev-btn" aria-label="Previous"><i class='bx bx-chevron-left'></i></button>
+          <button id="next-btn" aria-label="Next"><i class='bx bx-chevron-right'></i></button>
+        </div>
+      </div>
+
+      <div class="properties-grid">
+        <!-- Card 1 -->
+        <article class="property-card fade-up" id="property-card-1">
+          <div class="property-img">
+            <img src="assets/property-1.png" alt="Modern apartment building in Cairo" loading="lazy"/>
+            <span class="property-tag">For Sale</span>
+            <div class="property-fav" role="button" aria-label="Add to favourites">♡</div>
+          </div>
+          <div class="property-body">
+            <p class="property-price">5,500,000 EGP <span>/ Starting From</span></p>
+            <h3 class="property-name">Midtown Sky Residence</h3>
+            <p class="property-location">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Cairo, New City
+            </p>
+            <div class="property-meta">
+              <span class="meta-item"><i class='bx bx-bed'></i> 3 Beds</span>
+              <span class="meta-item"><i class='bx bx-bath'></i> 2 Baths</span>
+              <span class="meta-item"><i class='bx bx-area'></i> 150 m²</span>
+            </div>
+            <div class="property-actions">
+              <a href="#" class="btn-primary" id="details-btn-1">View details</a>
+              <a href="#" class="btn-outline" id="compare-btn-1">Add to compare</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Card 2 -->
+        <article class="property-card fade-up fade-up-delay-1" id="property-card-2">
+          <div class="property-img">
+            <img src="assets/property-2.png" alt="Elegant Egyptian villa in New Cairo" loading="lazy"/>
+            <span class="property-tag">New Launch</span>
+            <div class="property-fav" role="button" aria-label="Add to favourites">♡</div>
+          </div>
+          <div class="property-body">
+            <p class="property-price">3,500,000 EGP <span>/ Starting From</span></p>
+            <h3 class="property-name">Palm Garden Villa</h3>
+            <p class="property-location">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Cairo, New City
+            </p>
+            <div class="property-meta">
+              <span class="meta-item"><i class='bx bx-bed'></i> 4 Beds</span>
+              <span class="meta-item"><i class='bx bx-bath'></i> 3 Baths</span>
+              <span class="meta-item"><i class='bx bx-area'></i> 320 m²</span>
+            </div>
+            <div class="property-actions">
+              <a href="#" class="btn-primary" id="details-btn-2">View details</a>
+              <a href="#" class="btn-outline" id="compare-btn-2">Add to compare</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Card 3 -->
+        <article class="property-card fade-up fade-up-delay-2" id="property-card-3">
+          <div class="property-img">
+            <img src="assets/property-3.png" alt="Luxury penthouse interior in Heliopolis" loading="lazy"/>
+            <span class="property-tag" style="background:#10b981;">Featured</span>
+            <div class="property-fav" role="button" aria-label="Add to favourites">♡</div>
+          </div>
+          <div class="property-body">
+            <p class="property-price">7,995,000 EGP <span>/ Starting From</span></p>
+            <h3 class="property-name">Elite Tower Penthouse</h3>
+            <p class="property-location">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Cairo, Heliopolis
+            </p>
+            <div class="property-meta">
+              <span class="meta-item"><i class='bx bx-bed'></i> 5 Beds</span>
+              <span class="meta-item"><i class='bx bx-bath'></i> 4 Baths</span>
+              <span class="meta-item"><i class='bx bx-area'></i> 480 m²</span>
+            </div>
+            <div class="property-actions">
+              <a href="#" class="btn-primary" id="details-btn-3">View details</a>
+              <a href="#" class="btn-outline" id="compare-btn-3">Add to compare</a>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===========================
+       5. TESTIMONIALS
+       =========================== -->
+  <section class="testimonials" id="testimonials">
+    <div class="container">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Customer Says</h2>
+          <p class="section-subtitle">Hear from families who found their perfect home through Estately</p>
+        </div>
+        <div class="section-nav">
+          <button id="prev-testimonial-btn" aria-label="Previous testimonial"><i class='bx bx-chevron-left'></i></button>
+          <button id="next-testimonial-btn" aria-label="Next testimonial"><i class='bx bx-chevron-right'></i></button>
+        </div>
+      </div>
+
+      <div class="testimonials-grid">
+        <!-- Testimonial 1 -->
+        <div class="testimonial-card fade-up" id="testimonial-1">
+          <div class="quote-icon">"</div>
+          <div class="stars">
+            <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+          </div>
+          <p class="testimonial-text">
+            It is a long established fact that the well-founded choice of my first property in New Cairo became the best investment I've made. Estately made every step seamless and transparent.
+          </p>
+          <div class="testimonial-author">
+            <div class="author-avatar" style="background:linear-gradient(135deg,#f59e0b,#ef4444);">L</div>
+            <div class="author-info">
+              <p class="name">Laila Smith</p>
+              <p class="role">Homeowner, New Cairo</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Testimonial 2 -->
+        <div class="testimonial-card fade-up fade-up-delay-1" id="testimonial-2">
+          <div class="quote-icon">"</div>
+          <div class="stars">
+            <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+          </div>
+          <p class="testimonial-text">
+            It is a long established fact that the well-founded platform helped me find my dream villa in Palm Hills within just two weeks. The agent verification feature gave me full peace of mind.
+          </p>
+          <div class="testimonial-author">
+            <div class="author-avatar" style="background:linear-gradient(135deg,#3b82f6,#1a3560);">J</div>
+            <div class="author-info">
+              <p class="name">John Smith</p>
+              <p class="role">Investor, Giza</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Testimonial 3 -->
+        <div class="testimonial-card fade-up fade-up-delay-2" id="testimonial-3">
+          <div class="quote-icon">"</div>
+          <div class="stars">
+            <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+          </div>
+          <p class="testimonial-text">
+            It is a long established fact that the well-founded search tools on Estately let me compare dozens of projects side by side. I found a beautiful apartment in Heliopolis at the perfect price.
+          </p>
+          <div class="testimonial-author">
+            <div class="author-avatar" style="background:linear-gradient(135deg,#10b981,#065f46);">N</div>
+            <div class="author-info">
+              <p class="name">Nour Hassan</p>
+              <p class="role">First-time Buyer, Heliopolis</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===========================
+       6. FIND YOUR HOME
+       =========================== -->
+  <section class="find-home" id="find-home">
+    <div class="container">
+      <div class="find-home-inner">
+        <!-- Left: Content -->
+        <div class="find-home-content fade-up">
+          <h2>Let's find a home that's perfect for you</h2>
+          <p>We combine expert knowledge of the Egyptian real estate market with powerful AI tools to match you with the property that fits your lifestyle, budget, and investment goals.</p>
+          <div class="feature-list">
+            <div class="feature-item" id="feature-1">
+              <div class="feature-icon"><i class='bx bxs-home-heart'></i></div>
+              <div class="feature-text">
+                <h4>3,298 Verified Listings</h4>
+                <p>Browse thousands of fully verified properties updated daily across Egypt.</p>
+              </div>
+            </div>
+            <div class="feature-item" id="feature-2">
+              <div class="feature-icon"><i class='bx bxs-user-badge'></i></div>
+              <div class="feature-text">
+                <h4>Top Rated Agents</h4>
+                <p>Work only with certified, background-checked real estate professionals.</p>
+              </div>
+            </div>
+            <div class="feature-item" id="feature-3">
+              <div class="feature-icon"><i class='bx bxs-shield-check'></i></div>
+              <div class="feature-text">
+                <h4>Legal Protection</h4>
+                <p>Every transaction is backed by full legal documentation and support.</p>
+              </div>
+            </div>
+          </div>
+          <a href="#explore" class="btn-primary" id="browse-all-btn">
+            <i class='bx bx-search-alt'></i>
+            Browse All Properties
+          </a>
+        </div>
+
+        <!-- Right: Image -->
+        <div class="find-home-image fade-up fade-up-delay-1">
+          <img src="assets/find-home.png" alt="Luxury Egyptian home at dusk" loading="lazy"/>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===========================
+       7. STATS
+       =========================== -->
+  <section class="stats" id="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item" id="stat-1">
+          <div class="stat-number" data-target="3298">0</div>
+          <p class="stat-label">Active Listings</p>
+        </div>
+        <div class="stat-item stat-divider" id="stat-2">
+          <div class="stat-number" data-target="2181">0</div>
+          <p class="stat-label">Registered Agents</p>
+        </div>
+        <div class="stat-item stat-divider" id="stat-3">
+          <div class="stat-number" data-target="9316">0</div>
+          <p class="stat-label">Properties Sold</p>
+        </div>
+        <div class="stat-item stat-divider" id="stat-4">
+          <div class="stat-number" data-target="7191">0</div>
+          <p class="stat-label">Happy Families</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===========================
+       8. JOIN AGENTS CTA
+       =========================== -->
+  <section class="join-agents" id="join-agents">
+    <div class="container">
+      <h2 class="fade-up">Be a part of our growing real estate agents</h2>
+      <p class="fade-up fade-up-delay-1">Join Egypt's most trusted network and grow your business with Estately's verified platform.</p>
+      <a href="#" class="btn-join fade-up fade-up-delay-2" id="apply-agent-btn">
+        Apply For Your Coverage
+        <i class='bx bx-right-arrow-alt'></i>
+      </a>
+    </div>
+  </section>
+
+  <!-- ===========================
+       9. FOOTER
+       =========================== -->
+  <footer class="footer" id="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <!-- Brand -->
+        <div class="footer-brand">
+          <a href="#" class="nav-logo" id="footer-logo">
+            <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 3L2 13H6V27H12V19H18V27H24V13H28L15 3Z" fill="#2563c4"/>
+            </svg>
+            Estately
+          </a>
+          <p>Egypt's premier real estate platform connecting buyers, sellers, and top-rated agents across the country.</p>
+        </div>
+
+        <!-- Company -->
+        <div class="footer-col">
+          <h4>Company</h4>
+          <ul>
+            <li><a href="#" id="footer-about">About</a></li>
+            <li><a href="#" id="footer-careers">Careers</a></li>
+            <li><a href="#" id="footer-press">Press</a></li>
+            <li><a href="#" id="footer-partners">Partners</a></li>
+            <li><a href="#" id="footer-blog">Blog</a></li>
+          </ul>
+        </div>
+
+        <!-- Product -->
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#" id="footer-features">Features</a></li>
+            <li><a href="#" id="footer-pricing">Pricing</a></li>
+            <li><a href="#" id="footer-listings">Listings</a></li>
+            <li><a href="#" id="footer-agents">Agents</a></li>
+            <li><a href="#" id="footer-mortgage">Mortgage</a></li>
+          </ul>
+        </div>
+
+        <!-- News -->
+        <div class="footer-col">
+          <h4>News</h4>
+          <ul>
+            <li><a href="#" id="footer-market">Market Trends</a></li>
+            <li><a href="#" id="footer-guides">Buyer Guides</a></li>
+            <li><a href="#" id="footer-news">News & Events</a></li>
+            <li><a href="#" id="footer-tips">Tips & Advice</a></li>
+          </ul>
+        </div>
+
+        <!-- Resources -->
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="#" id="footer-help">Help Center</a></li>
+            <li><a href="#" id="footer-privacy">Privacy Policy</a></li>
+            <li><a href="#" id="footer-terms">Terms of Use</a></li>
+            <li><a href="#" id="footer-contact">Contact Us</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Footer Bottom -->
+      <div class="footer-bottom">
+        <p class="footer-copy">© 2025 Estately. All rights reserved. Egypt's Real Estate Platform.</p>
+        <div class="social-links">
+          <a href="#" class="social-link" id="social-facebook" aria-label="Facebook"><i class='bx bxl-facebook'></i></a>
+          <a href="#" class="social-link" id="social-twitter" aria-label="Twitter/X"><i class='bx bxl-twitter'></i></a>
+          <a href="#" class="social-link" id="social-instagram" aria-label="Instagram"><i class='bx bxl-instagram'></i></a>
+          <a href="#" class="social-link" id="social-linkedin" aria-label="LinkedIn"><i class='bx bxl-linkedin'></i></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

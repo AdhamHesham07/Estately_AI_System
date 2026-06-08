@@ -46,6 +46,7 @@ class DataBridge:
             
             # Extract unique valid names for hierarchical location levels
             cls._location_grounding_data = {
+                "cities": property_dataframe['city'].dropna().unique().tolist() if 'city' in property_dataframe.columns else [],
                 "towns": property_dataframe['town'].dropna().unique().tolist(),
                 "districts": property_dataframe['district'].dropna().unique().tolist() if 'district' in property_dataframe.columns else [],
                 "subdistricts": property_dataframe['subdistrict'].dropna().unique().tolist() if 'subdistrict' in property_dataframe.columns else []
@@ -53,6 +54,7 @@ class DataBridge:
             
             # Flatten all valid names into one list for rapid fuzzy matching
             cls._all_valid_location_names = list(set(
+                cls._location_grounding_data["cities"] + 
                 cls._location_grounding_data["towns"] + 
                 cls._location_grounding_data["districts"] + 
                 cls._location_grounding_data["subdistricts"]
@@ -105,6 +107,7 @@ class DataBridge:
         
         # Prepare arrays for hierarchical location matching
         location_level_mappings = {
+            "city": grounding_data.get("cities", []),
             "town": grounding_data.get("towns", []),
             "district": grounding_data.get("districts", []),
             "subdistrict": grounding_data.get("subdistricts", [])
@@ -153,7 +156,7 @@ class DataBridge:
         Automatically intercepts and normalizes locations before querying.
         """
         # Iterate over location fields to ensure they align exactly with the database schema
-        for location_filter_key in ("town", "district", "subdistrict"):
+        for location_filter_key in ("city", "town", "district", "subdistrict"):
             if location_filter_key in filters and filters.get(location_filter_key):
                 resolved_location_data = DataBridge.resolve_location(filters[location_filter_key])
                 normalized_location_value = resolved_location_data.get("value")

@@ -176,7 +176,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     # 6. Guardrails: Calculate missing prerequisites dynamically based on workflow intent
     missing_required_fields = []
     detected_intent = extracted_json_data.get("intent", "idle")
-    discussion_context = extracted_json_data.get("discussion_context", {})
+    discussion_context = extracted_json_data.get("discussion_context") or {}
     dialogue_act = detect_dialogue_act(latest_user_message_for_regex)
     target_property_refs = extract_property_refs(latest_user_message_for_regex)
     previous_reference_map = current_state.get("reference_map", {}) or {}

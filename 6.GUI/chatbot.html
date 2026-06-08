@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estately AI Assistant — Real Estate Chatbot</title>
+  <meta name="description" content="Chat with Estately's AI real estate assistant to find properties, compare prices, and get expert advice across Egypt."/>
+  <link rel="stylesheet" href="chatbot.css"/>
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet"/>
+  <!-- Arabic font (lazy-loaded when needed) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <!-- ===========================
+       NAVBAR
+       =========================== -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <!-- Logo -->
+      <a href="index.html" class="nav-logo" id="nav-logo">
+        Estately
+      </a>
+
+      <!-- Nav Links -->
+      <ul class="nav-links">
+        <li><a href="index.html" id="nav-home-link">Home</a></li>
+        <li><a href="#" id="nav-properties-link">Properties</a></li>
+        <li><a href="#" id="nav-agencies-link">Agencies</a></li>
+        <li><a href="#" id="nav-services-link">Services</a></li>
+        <li><a href="#" id="nav-about-link">About</a></li>
+        <li><a href="#" id="nav-contact-link">Contact</a></li>
+        <li><a href="#" id="nav-blog-link">Blog</a></li>
+      </ul>
+
+      <!-- Right side -->
+      <div class="nav-right">
+        <a href="#" id="nav-login-link" class="btn-register">Login</a>
+        <!-- Language Toggle -->
+        <div class="lang-toggle" id="lang-toggle" role="group" aria-label="Language selection">
+          <button class="lang-btn active" id="btn-en" onclick="setLang('en')">EN</button>
+          <button class="lang-btn" id="btn-ar" onclick="setLang('ar')">AR</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===========================
+       MAIN LAYOUT
+       =========================== -->
+  <div class="chat-layout">
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar" id="sidebar">
+
+      <!-- Agent intro card -->
+      <div class="agent-intro">
+        <div class="agent-avatar-lg">🏠</div>
+        <h2 id="agent-intro-title">Estately AI</h2>
+        <p id="agent-intro-desc">Your smart real estate assistant for Egypt's property market</p>
+        <div class="online-dot" id="online-status">Online & Ready</div>
+      </div>
+
+      <!-- New conversation -->
+      <button class="btn-new-chat" id="new-chat-btn" onclick="newConversation()">
+        <i class='bx bx-plus-circle'></i>
+        <span id="new-chat-label">New Conversation</span>
+      </button>
+
+      <!-- Capabilities -->
+      <div class="sidebar-section">
+        <h3 id="capabilities-title">Key Capabilities</h3>
+        <div class="feature-list">
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bx-search-alt'></i></div>
+            <div class="feature-text">
+              <strong id="feat-1-title">Smart Property Search</strong>
+              <span id="feat-1-desc">Find listings using natural language across all of Egypt</span>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bx-bar-chart-alt-2'></i></div>
+            <div class="feature-text">
+              <strong id="feat-2-title">Market Analytics</strong>
+              <span id="feat-2-desc">Get real-time price trends and investment insights</span>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bxs-star'></i></div>
+            <div class="feature-text">
+              <strong id="feat-3-title">AI Recommendations</strong>
+              <span id="feat-3-desc">Personalized property matches based on your needs</span>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon"><i class='bx bx-globe'></i></div>
+            <div class="feature-text">
+              <strong id="feat-4-title">Multilingual Support</strong>
+              <span id="feat-4-desc">Ask in English or Arabic — we understand both</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Example Prompts -->
+      <div class="sidebar-section">
+        <h3 id="examples-title">Example Prompts</h3>
+        <div class="example-chips" id="example-chips">
+          <button class="chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="Find me an apartment in New Cairo under 5 million EGP">
+            <span class="chip-icon">🔍</span>
+            <span class="chip-text" id="chip-1">Find me an apartment in New Cairo under 5 million EGP</span>
+          </button>
+          <button class="chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="Compare villa prices in Sheikh Zayed vs Fifth Settlement">
+            <span class="chip-icon">📊</span>
+            <span class="chip-text" id="chip-2">Compare villa prices in Sheikh Zayed vs Fifth Settlement</span>
+          </button>
+          <button class="chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="I need a 3-bedroom place near AUC for 8 million EGP">
+            <span class="chip-icon">🏡</span>
+            <span class="chip-text" id="chip-3">I need a 3-bedroom place near AUC for 8 million EGP</span>
+          </button>
+          <button class="chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="What are the best investment areas in Cairo right now?">
+            <span class="chip-icon">💡</span>
+            <span class="chip-text" id="chip-4">What are the best investment areas in Cairo right now?</span>
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── CHAT PANEL ── -->
+    <main class="chat-panel" id="chat-panel">
+
+      <!-- Chat header -->
+      <div class="chat-header">
+        <div class="chat-header-left">
+          <div class="agent-avatar-sm">🏠</div>
+          <div class="chat-header-info">
+            <p class="agent-name" id="chat-agent-name">Estately AI Assistant</p>
+            <p class="agent-status" id="chat-agent-status">Online — Real Estate Expert</p>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="messages-area" id="messages-area">
+
+        <!-- Welcome state (shown when no messages) -->
+        <div class="welcome-state" id="welcome-state">
+          <div class="welcome-icon">🏠</div>
+          <h2 id="welcome-title">Welcome to Estately AI</h2>
+          <p id="welcome-desc">Ask me anything about properties in Egypt — search listings, compare prices, or get personalized recommendations.</p>
+          <div class="welcome-chips">
+            <button class="welcome-chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="Find apartments in New Cairo" id="wc-1">Find apartments in New Cairo</button>
+            <button class="welcome-chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="Show me villa prices in Maadi" id="wc-2">Villa prices in Maadi</button>
+            <button class="welcome-chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="Best areas to invest in Cairo" id="wc-3">Best investment areas</button>
+            <button class="welcome-chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="3-bedroom under 6 million EGP" id="wc-4">3-bed under 6M EGP</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Input area -->
+      <div class="input-area">
+        <div class="input-row" id="input-row">
+          <textarea
+            id="chat-input"
+            rows="1"
+            placeholder="Describe your ideal property..."
+            aria-label="Chat message input"
+          ></textarea>
+          <div class="input-actions">
+            <button class="send-btn" id="send-btn" title="Send message" disabled>
+              <i class='bx bx-send'></i>
+            </button>
+          </div>
+        </div>
+        <div class="input-footer">
+          <span class="input-hint" id="input-hint">Press Enter to send · Shift+Enter for new line</span>
+          <span class="char-count" id="char-count">0 / 500</span>
+        </div>
+      </div>
+
+    </main>
+  </div><!-- /chat-layout -->
+
+  <!-- ===========================
+       FOOTER
+       =========================== -->
+  <footer class="bot-footer">
+    <div class="bot-footer-top">
+      <div class="footer-brand">
+        <div class="footer-logo">
+          <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:28px;height:28px;margin-right:8px;">
+            <path d="M15 3L2 13H6V27H12V19H18V27H24V13H28L15 3Z" fill="#1a3560"/>
+          </svg>
+          <span style="font-weight: 800; font-size: 26px; color: var(--navy); letter-spacing: -0.5px;">Estately</span>
+        </div>
+        <p id="footer-agency">Real Estate Agency</p>
+      </div>
+
+      <div class="footer-links-col">
+        <h4 id="footer-company">Company</h4>
+        <ul>
+          <li><a href="#" id="ft-home">Home</a></li>
+          <li><a href="#" id="ft-props">Properties</a></li>
+          <li><a href="#" id="ft-services">Services</a></li>
+          <li><a href="#" id="ft-about">About</a></li>
+          <li><a href="#" id="ft-contact">Contact</a></li>
+          <li><a href="#" id="ft-blog">Blog</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links-col">
+        <h4 id="footer-product">Product</h4>
+        <ul>
+          <li><a href="#" id="ft-overview">Overview</a></li>
+          <li><a href="#" id="ft-pricing">Pricing</a></li>
+          <li><a href="#" id="ft-market">Marketplace</a></li>
+          <li><a href="#" id="ft-features">Features</a></li>
+          <li><a href="#" id="ft-integ">Integrations</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links-col">
+        <h4 id="footer-areas">Areas</h4>
+        <ul>
+          <li><a href="#" id="ft-cairo">New Cairo</a></li>
+          <li><a href="#" id="ft-zayed">El Sheikh Zayed</a></li>
+          <li><a href="#" id="ft-alamein">Al Alamein</a></li>
+          <li><a href="#" id="ft-sokhna">Ain Sokhna</a></li>
+          <li><a href="#" id="ft-hekma">Ras El Hekma</a></li>
+          <li><a href="#" id="ft-maadi">El Maadi</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links-col">
+        <h4 id="footer-resources">Resources</h4>
+        <ul>
+          <li><a href="#" id="ft-help">Help</a></li>
+          <li><a href="#" id="ft-sales">Sales</a></li>
+          <li><a href="#" id="ft-ads">Advertise</a></li>
+          <li><a href="#" id="ft-faq">FAQ</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="bot-footer-bottom">
+      <p class="copyright" id="footer-copyright">Copyright © 2025 Estately. All rights reserved.</p>
+      <div class="social-icons">
+        <a href="#" aria-label="Instagram"><i class='bx bxl-instagram'></i></a>
+        <a href="#" aria-label="Twitter"><i class='bx bxl-twitter'></i></a>
+        <a href="#" aria-label="Facebook"><i class='bx bxl-facebook'></i></a>
+        <a href="#" aria-label="LinkedIn"><i class='bx bxl-linkedin'></i></a>
+      </div>
+      <div class="legal-links">
+        <a href="#" id="ft-terms">Terms and Conditions</a>
+        <a href="#" id="ft-privacy">Privacy Policy</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="chatbot.js"></script>
+</body>
+</html>

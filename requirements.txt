@@ -1,0 +1,56 @@
+# ============================================================
+# Estately AI System — Requirements
+# Generated: 2026-06-08
+# Python: 3.14
+# ============================================================
+
+# ──────────────────────────────────────────────
+# AGENT LAYER  (1.Agent)
+# ──────────────────────────────────────────────
+langgraph==1.2.1                  # LangGraph graph engine (StateGraph, MemorySaver)
+langgraph-checkpoint==4.1.1       # Checkpointing for MemorySaver
+langchain-core==1.4.0             # HumanMessage, AIMessage, add_messages
+langchain==1.3.1                  # Core LangChain primitives
+litellm==1.83.7                   # Unified LLM gateway (Groq, Gemini, OpenAI)
+python-dotenv==1.0.1              # .env file loading
+rapidfuzz==3.14.5                 # Fuzzy location matching (resolve_location)
+pyodbc==5.3.0                     # SQL Server connectivity (BookingEngine)
+
+# ──────────────────────────────────────────────
+# GUI / API  (agent_gui.py, 5.APIs)
+# ──────────────────────────────────────────────
+gradio==6.13.0                    # Gradio chatbot UI (agent_gui.py)
+fastapi==0.136.1                  # REST API server (5.APIs/main.py)
+uvicorn==0.46.0                   # ASGI server for FastAPI
+
+# ──────────────────────────────────────────────
+# RECOMMENDER  (2.Recommender)
+# ──────────────────────────────────────────────
+faiss-cpu==1.13.2                 # FAISS vector index (semantic retrieval)
+xgboost==3.2.0                    # XGBoost ranker model
+sentence-transformers==5.4.1      # SentenceTransformer embeddings (paraphrase-multilingual-MiniLM-L12-v2)
+numpy==2.4.6                      # Numerical arrays (feature engineering, MMR)
+pandas==3.0.3                     # DataFrames (property pool, training data)
+scikit-learn==1.8.0               # train_test_split
+tqdm==4.67.3                      # Progress bars during training
+joblib==1.5.3                     # Cache serialization (stage1_data.joblib, stage3_vectors.joblib)
+
+# ──────────────────────────────────────────────
+# ANALYZER  (3.Analyzer)
+# ──────────────────────────────────────────────
+scipy==1.17.1                     # stats.percentileofscore (FairPriceEstimator)
+langchain-community==0.4.1        # FAISS vector store (KnowledgeEngine RAG)
+langchain-huggingface==1.2.2      # HuggingFaceEndpointEmbeddings (KnowledgeEngine)
+
+# ──────────────────────────────────────────────
+# DATA LAYER  (4.Data)
+# ──────────────────────────────────────────────
+SQLAlchemy==2.0.49                # SQLite engine for DatabaseConnector / DBAdapter
+
+# ──────────────────────────────────────────────
+# OPTIONAL / INDIRECT DEPENDENCIES
+# (installed automatically as transitive deps, listed for clarity)
+# ──────────────────────────────────────────────
+langchain-google-genai==4.2.3     # Gemini fallback model support via LiteLLM
+langchain-groq==1.1.2             # Groq model support via LiteLLM
+huggingface_hub==0.36.2           # HuggingFace model downloads (SentenceTransformer)
