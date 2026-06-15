@@ -385,33 +385,43 @@ async function sendMessage() {
   sendBtn.disabled = true;
   showTyping();
 
-  // Simulate backend call (mock mode)
-  const delay = 900 + Math.random() * 800;
-  await new Promise(r => setTimeout(r, delay));
-
-  removeTyping();
-  isTyping = false;
-  sendBtn.disabled = false;
-  chatInput.focus();
-
-  // Pick a mock response
-  const pool = mockResponses[currentLang] || mockResponses.en;
-  const reply = pool[Math.floor(Math.random() * pool.length)];
-  appendMessage('agent', reply);
-
-  /* ── Swap this block for a real backend call: ──
   try {
-    const res = await fetch('http://localhost:8000/chat', {
+    if (!window.estatelyThreadId) {
+      try {
+        window.estatelyThreadId = localStorage.getItem("estately_thread_id");
+      } catch (e) {
+        console.warn("localStorage not available, using RAM threadId");
+      }
+      if (!window.estatelyThreadId) {
+        window.estatelyThreadId = "gui_" + Math.random().toString(36).substring(2, 15);
+        try {
+          localStorage.setItem("estately_thread_id", window.estatelyThreadId);
+        } catch (e) {}
+      }
+    }
+    
+    const res = await fetch('http://127.0.0.1:8000/api/v1/agent/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, thread_id: threadId, lang: currentLang })
+      body: JSON.stringify({ message: text, session_id: window.estatelyThreadId, lang: currentLang })
     });
+    
     const data = await res.json();
-    appendMessage('agent', data.reply);
+    
+    removeTyping();
+    if (data.reply) {
+      appendMessage('agent', data.reply);
+    } else {
+      appendMessage('agent', '⚠️ Error: ' + (data.error || 'Unknown error occurred.'));
+    }
   } catch (err) {
-    appendMessage('agent', '⚠️ Could not connect to the agent. Please ensure the server is running.');
+    removeTyping();
+    appendMessage('agent', '⚠️ Could not connect to the agent. Please ensure the API server is running on port 8000.');
+  } finally {
+    isTyping = false;
+    sendBtn.disabled = false;
+    chatInput.focus();
   }
-  ── ─────────────────────────────────────────── */
 }
 
 /* ─────────────────────────────────────────────
@@ -432,6 +442,13 @@ function newConversation() {
   messageIdCounter = 0;
   isTyping = false;
 
+  window.estatelyThreadId = null;
+  try {
+    localStorage.removeItem("estately_thread_id");
+  } catch (e) {
+    console.warn("Could not clear localStorage");
+  }
+
   // Remove all message rows & typing
   const rows = messagesArea.querySelectorAll('.message-row, .typing-row');
   rows.forEach(r => r.remove());
@@ -443,6 +460,11 @@ function newConversation() {
   autoResize();
   updateSendBtn();
   chatInput.focus();
+
+  // Show greeting after a brief delay
+  setTimeout(() => {
+    appendMessage('agent', i18n[currentLang].greetingMsg);
+  }, 400);
 }
 
 /* ─────────────────────────────────────────────
@@ -465,16 +487,19 @@ function updateSendBtn() {
 /* ─────────────────────────────────────────────
    Download chat as .txt
    ───────────────────────────────────────────── */
-document.getElementById('download-chat-btn').addEventListener('click', () => {
-  if (!messages.length) return;
-  const lines = messages.map(m => `[${m.time}] ${m.role === 'user' ? 'You' : 'Estately AI'}: ${m.text}`);
-  const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `estately-chat-${Date.now()}.txt`
+const downloadBtn = document.getElementById('download-chat-btn');
+if (downloadBtn) {
+  downloadBtn.addEventListener('click', () => {
+    if (!messages.length) return;
+    const lines = messages.map(m => `[${m.time}] ${m.role === 'user' ? 'You' : 'Estately AI'}: ${m.text}`);
+    const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' });
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: `estately-chat-${Date.now()}.txt`
+    });
+    a.click();
   });
-  a.click();
-});
+}
 
 /* ─────────────────────────────────────────────
    Event listeners

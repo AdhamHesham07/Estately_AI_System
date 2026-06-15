@@ -1,5 +1,9 @@
 import os
 import sys
+import faiss
+import pickle
+import numpy as np
+import requests
 from dotenv import load_dotenv
 
 # Ensure cross-module imports work
@@ -8,51 +12,63 @@ sys.path.append(BASE_DIR)
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-try:
-    from langchain_community.vectorstores import FAISS
-    from langchain_huggingface import HuggingFaceEndpointEmbeddings
-except ImportError:
-    pass  # Handled gracefully below
-
 class KnowledgeEngine:
     """
     RAG Retrieval System for the Analyzer.
     Loads the local FAISS index built by the Data Acquisition layer 
-    and performs semantic similarity searches to retrieve qualitative market context.
+    and performs semantic similarity searches using direct API calls.
     """
     
     _vector_store = None
-    _embeddings_model = None
+    _chunks = None
+    _metadata = None
 
     @classmethod
     def _initialize(cls):
         if cls._vector_store is not None:
             return True
             
-        hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-        if not hf_token:
-            print("!!! [WARNING] HUGGINGFACEHUB_API_TOKEN not found. RAG Knowledge Engine is offline.")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_key:
+            print("!!! [WARNING] GEMINI_API_KEY not found. RAG Knowledge Engine is offline.")
             return False
             
         try:
-            # Re-initialize the same embedding model used during ingestion
-            cls._embeddings_model = HuggingFaceEndpointEmbeddings(
-                model="BAAI/bge-m3",
-                huggingfacehub_api_token=hf_token
-            )
+            faiss_index_dir = os.path.abspath(os.path.join(BASE_DIR, "4.Data", "3_market_knowledge", "faiss_index"))
+            index_path = os.path.join(faiss_index_dir, "index.faiss")
+            pkl_path = os.path.join(faiss_index_dir, "metadata.pkl")
             
-            faiss_index_path = os.path.abspath(os.path.join(BASE_DIR, "4.Data", "3_market_knowledge", "faiss_index"))
-            
-            if not os.path.exists(faiss_index_path):
-                print(f"!!! [WARNING] FAISS index not found at {faiss_index_path}. Run knowledge_loader.py first.")
+            if not os.path.exists(index_path) or not os.path.exists(pkl_path):
+                print(f"!!! [WARNING] FAISS index not found at {faiss_index_dir}. Run knowledge_loader.py first.")
                 return False
                 
-            # Load the vector store into memory
-            cls._vector_store = FAISS.load_local(faiss_index_path, cls._embeddings_model, allow_dangerous_deserialization=True)
+            # Load the vector store and metadata into memory
+            cls._vector_store = faiss.read_index(index_path)
+            with open(pkl_path, "rb") as f:
+                cls._chunks, cls._metadata = pickle.load(f)
+                
             return True
         except Exception as e:
             print(f"!!! [ERROR] Failed to load RAG Vector Store: {e}")
             return False
+
+    @staticmethod
+    def _get_embedding(text: str) -> np.ndarray:
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={gemini_key}"
+        payload = {
+            "content": {"parts": [{"text": text}]}
+        }
+        response = requests.post(api_url, json=payload)
+        if response.status_code != 200:
+            raise Exception(f"Gemini API Error: {response.text}")
+        
+        data = response.json()
+        emb = data.get("embedding", {}).get("values")
+        if not emb:
+            raise Exception("No embedding found in Gemini response.")
+            
+        return np.array([emb], dtype=np.float32)
 
     @classmethod
     def retrieve_context(cls, query: str, top_k: int = 3) -> str:
@@ -64,20 +80,25 @@ class KnowledgeEngine:
             return "No qualitative market context available at this time."
             
         try:
-            # Perform similarity search
-            relevant_docs = cls._vector_store.similarity_search(query, k=top_k)
+            query_emb = cls._get_embedding(query)
             
-            if not relevant_docs:
+            # Perform similarity search
+            distances, indices = cls._vector_store.search(query_emb, top_k)
+            
+            if len(indices[0]) == 0 or indices[0][0] == -1:
                 return "No highly relevant market context found in the knowledge base."
                 
             # Compile the retrieved chunks into a dense context block
             context_payload = "[RAG_MARKET_CONTEXT]\n"
-            for idx, doc in enumerate(relevant_docs, start=1):
-                source = doc.metadata.get('source', 'Unknown Document')
-                # Optional: clean up source path to just the filename
-                source_filename = os.path.basename(source) if source != 'Unknown Document' else source
-                context_payload += f"--- Excerpt {idx} (Source: {source_filename}) ---\n"
-                context_payload += f"{doc.page_content.strip()}\n\n"
+            for idx_count, idx in enumerate(indices[0], start=1):
+                if idx == -1:
+                    continue
+                content = cls._chunks[idx]
+                meta = cls._metadata[idx]
+                source = meta.get('source', 'Unknown Document')
+                
+                context_payload += f"--- Excerpt {idx_count} (Source: {source}) ---\n"
+                context_payload += f"{content.strip()}\n\n"
                 
             return context_payload
             

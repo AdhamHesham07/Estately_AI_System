@@ -211,8 +211,26 @@ class DataBridge:
             # 1. Qualitative Data
             knowledge_context = knowledge_engine.KnowledgeEngine.retrieve_context(user_query)
             
+            # Normalize filters for Quantitative Analysis to prevent 0-result errors
+            normalized_filters = current_filters.copy()
+            # Need a list of keys since we are modifying the dict during iteration
+            for loc_key in list(normalized_filters.keys()):
+                if loc_key in ("city", "town", "district", "subdistrict") and normalized_filters.get(loc_key):
+                    val = str(normalized_filters[loc_key])
+                    # If it's a comparison query, drop the strict location filter so the LLM gets global context
+                    if " vs " in val.lower() or " and " in val.lower() or "قارن" in val.lower() or "," in val:
+                        normalized_filters.pop(loc_key)
+                        continue
+                        
+                    resolved = DataBridge.resolve_location(val)
+                    if resolved.get("value"):
+                        resolved_level = resolved.get("level", loc_key)
+                        normalized_filters[resolved_level] = resolved["value"]
+                        if resolved_level != loc_key:
+                            normalized_filters.pop(loc_key, None)
+                            
             # 2. Quantitative Data
-            market_stats = market_engine.MarketPulse.get_snapshot(current_filters)
+            market_stats = market_engine.MarketPulse.get_snapshot(normalized_filters)
             
             # 3. Preference Data (Tradeoffs)
             # The preference engine currently expects candidates to be generated, 

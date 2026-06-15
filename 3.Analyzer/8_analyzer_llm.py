@@ -16,8 +16,8 @@ except ImportError:
     print("!!! [WARNING] Could not load LiteLLM fallback from Agent module.")
     litellm_completion_with_groq_key_fallback = None
 
-ANALYZER_MODEL = "groq/llama3-70b-8192"
-FALLBACK_MODEL = "gemini/gemini-1.5-pro"
+ANALYZER_MODEL = "groq/llama-3.3-70b-versatile"
+FALLBACK_MODEL = "gemini/gemini-2.0-flash"
 
 ANALYZER_LLM_PROMPT = """
 You are the Deep Analytical Engine for an Elite Real Estate AI.

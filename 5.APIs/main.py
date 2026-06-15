@@ -25,22 +25,27 @@ try:
     from importlib import import_module
     
     # Recommender
-    QueryAdapter = import_module("2.Recommender.5_query_adapter").QueryAdapter
+    sys.path.append(os.path.join(BASE_DIR, "2.Recommender"))
+    QueryAdapter = import_module("5_query_adapter").QueryAdapter
     
     # Analyzer
-    market_engine = import_module("3.Analyzer.3_market_engine")
+    sys.path.append(os.path.join(BASE_DIR, "3.Analyzer"))
+    market_engine = import_module("3_market_engine")
     FairPriceEstimator = market_engine.FairPriceEstimator
     MarketPulse = market_engine.MarketPulse
     
     # Agent Chatbot
-    build_agent_graph = import_module("1.Agent.4_graph_builder").build_agent_graph
+    sys.path.append(os.path.join(BASE_DIR, "1.Agent"))
+    build_agent_graph = import_module("4_graph_builder").build_agent_graph
     
     # Initialize the Agent graph once at startup
     print("Initializing Agent Graph...")
     agent_app = build_agent_graph()
     
 except Exception as e:
+    import traceback
     print(f"Error importing core modules: {e}")
+    traceback.print_exc()
     # Still start the API but endpoints will fail, useful for debugging
     QueryAdapter = None
     FairPriceEstimator = None
@@ -129,20 +134,31 @@ def chat_with_agent(chat_input: ChatMessage):
     try:
         # Configure memory for the specific session
         config = {"configurable": {"thread_id": chat_input.session_id}}
-        inputs = {"messages": [HumanMessage(content=chat_input.message)], "user_language": "en"}
+        inputs = {"messages": [HumanMessage(content=chat_input.message)], "user_language": chat_input.lang}
         
         # Invoke the LangGraph agent
         result = agent_app.invoke(inputs, config)
         
         # Extract the latest response message
         messages = result.get("messages", [])
-        if messages:
-             return {"reply": messages[-1].content}
+        intent = result.get("active_intent", "unknown")
+        missing_info = result.get("missing_info", [])
         
-        return {"reply": "I'm sorry, I couldn't generate a response."}
+        if not messages:
+            return {"reply": "I'm sorry, I couldn't generate a response.", "intent": "unknown", "missing_info": []}
+            
+        # Get the last message's content
+        last_message = messages[-1]
+        reply_text = getattr(last_message, "content", str(last_message))
+        
+        return {
+            "reply": reply_text, 
+            "intent": intent, 
+            "missing_info": missing_info
+        }
         
     except Exception as e:
-         return {"reply": "", "error": str(e)}
+         return {"reply": "", "error": str(e), "intent": "error", "missing_info": []}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

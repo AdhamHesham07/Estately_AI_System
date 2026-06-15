@@ -380,19 +380,63 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
             }
         }
 
-    idle_message = (
-        "Welcome! I am your elite AI Real Estate Consultant.\n\n"
-        "Here is how I can assist you today:\n"
-        "- **Find Properties:** Share your budget, preferred area, and property type.\n"
-        "- **Compare & Discuss:** Ask me to compare specific listings or give my expert opinion on a property.\n"
-        "- **Market Insights:** Ask about trends or valuations in areas like New Cairo.\n"
-        "- **Book Viewings:** I can seamlessly schedule site visits for properties you are interested in.\n\n"
-        "How may I help you navigate the market today?"
+    # 3. Fallback to Idle / Greeting via LLM
+    all_messages = current_state.get("messages", [])
+    actual_user_question = ""
+    for msg in reversed(all_messages):
+        if getattr(msg, "type", "") == "human":
+            actual_user_question = getattr(msg, "content", "") or ""
+            break
+
+    idle_prompt = (
+        "You are an elite AI Real Estate Consultant. The user just said something casual or unrelated to a specific property search.\n"
+        "Respond warmly and professionally. Briefly remind them that you can help them find properties, compare listings, provide market insights, or book viewings.\n"
+        "Keep it concise (2-3 sentences max) and end with a welcoming question."
     )
-    if user_language.startswith("ar"):
+
+    try:
+        target_llm_model = current_state.get("active_model", PRIMARY_MODEL)
+        available_fallbacks = FALLBACK_MODELS_LIST if target_llm_model == PRIMARY_MODEL else []
+
+        print(f"--- [TONGUE] Idle Mode - Calling Model: {target_llm_model} ---")
+        llm_response = litellm_completion_with_groq_key_fallback(
+            model=target_llm_model,
+            messages=[
+                {"role": "system", "content": idle_prompt},
+                {"role": "user", "content": actual_user_question or "Hello!"}
+            ],
+            fallbacks=available_fallbacks
+        )
+        actual_model_used = llm_response.model
+
+        if "/" not in actual_model_used:
+            for fallback_candidate in [PRIMARY_MODEL] + FALLBACK_MODELS_LIST:
+                if actual_model_used in fallback_candidate:
+                    actual_model_used = fallback_candidate
+                    break
+                    
+        idle_message = llm_response.choices[0].message.content
+        if user_language.startswith("ar"):
+            idle_message = translate_to_arabic(idle_message)
+    except Exception as llm_error:
+        print(f"!!! [TONGUE_ERROR] Idle LLM failed: {llm_error}")
+        idle_message = (
+            "Welcome! I am your elite AI Real Estate Consultant.\n\n"
+            "Here is how I can assist you today:\n"
+            "- **Find Properties:** Share your budget, preferred area, and property type.\n"
+            "- **Compare & Discuss:** Ask me to compare specific listings or give my expert opinion on a property.\n"
+            "- **Market Insights:** Ask about trends or valuations in areas like New Cairo.\n"
+            "- **Book Viewings:** I can seamlessly schedule site visits for properties you are interested in.\n\n"
+            "How may I help you navigate the market today?"
+        )
+        actual_model_used = getattr(current_state, "active_model", PRIMARY_MODEL)
+
+    if user_language.startswith("ar") and "Welcome!" in idle_message:
         idle_message = translate_to_arabic(idle_message)
+        
     return {
         "messages": [AIMessage(content=idle_message)],
+        "active_model": actual_model_used if 'actual_model_used' in locals() else current_state.get("active_model", PRIMARY_MODEL),
         "response_plan": {
             "answer_first": idle_message,
             "evidence_block": [],

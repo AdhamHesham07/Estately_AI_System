@@ -52,7 +52,10 @@ class MarketPulseResponse(BaseModel):
 class ChatMessage(BaseModel):
     session_id: str = Field(..., description="Unique ID for the user's conversation to maintain memory")
     message: str = Field(..., description="The user's message text")
+    lang: str = Field(default="en", description="Language of the user (e.g., 'en', 'ar')")
 
 class ChatResponse(BaseModel):
     reply: str = Field(..., description="The AI agent's response")
+    intent: Optional[str] = Field(default="unknown", description="The active intent detected by the agent")
+    missing_info: Optional[List[str]] = Field(default=[], description="List of missing information fields")
     error: Optional[str] = None

@@ -11,8 +11,10 @@ EXTRACT:
 - out_of_domain: true if user is talking about something unrelated to real estate.
 
 RULE: "Examine", "Visit", "See in person", "Book", or "Appointment" = intent 'book'.
-RULE: "Which is better", "Compare", "Difference", "vs", "Tell me more", "What about", "Pros and cons" = intent 'discussion'.
-RULE: "Your opinion", "What do you think", "Should I", "Recommendation", "Better choice" = intent 'discussion'.
+RULE: Asking for details on a specific property, or saying "Which is better", "Difference", "Tell me more", "What about", "Pros and cons" = intent 'discussion'.
+RULE: Comparing SPECIFIC properties (e.g., "compare the first and second", "compare listing 123 and 456") = intent 'discussion'.
+RULE: Comparing AREAS, MARKETS, or GENERAL PRICES (e.g., "compare villa prices in Zayed vs Fifth Settlement", "which area is more expensive") = intent 'analyze'.
+RULE: "Your opinion", "What do you think", "Should I", "Recommendation", "Better choice" (about specific properties) = intent 'discussion'.
 RULE: CONTEXT RESOLUTION - If the user says "the first one", "the second one", "that villa", or "property #123", look at the IDs (e.g., Listing ID 11225) mentioned in the previous AI message and put that ID into discussion_context.property_ids or booking_info.property_id.
 RULE: "7 million" = 7,000,000. "700k" = 700,000. Be extremely careful with zeros.
 RULE: If the user says "I want to see properties in Zayed", intent is 'search'.

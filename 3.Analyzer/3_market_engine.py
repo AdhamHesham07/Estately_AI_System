@@ -210,10 +210,15 @@ class MarketPulse:
         
         # Apply user-wise filters if provided
         if filters:
-            if filters.get('town'):
-                global_dataframe = global_dataframe[global_dataframe['town'].str.lower() == filters['town'].lower()]
-            if filters.get('property_type'):
-                global_dataframe = global_dataframe[global_dataframe['property_type'].str.lower() == filters['property_type'].lower()]
+            if filters.get('city') and 'city' in global_dataframe.columns:
+                global_dataframe = global_dataframe[global_dataframe['city'].astype(str).str.lower() == str(filters['city']).lower()]
+            if filters.get('town') and 'town' in global_dataframe.columns:
+                global_dataframe = global_dataframe[global_dataframe['town'].astype(str).str.lower() == str(filters['town']).lower()]
+            if filters.get('district') and 'district' in global_dataframe.columns:
+                global_dataframe = global_dataframe[global_dataframe['district'].astype(str).str.lower() == str(filters['district']).lower()]
+            if filters.get('property_type') and 'property_type' in global_dataframe.columns:
+                pt_list = [p.strip().lower() for p in str(filters['property_type']).split(',')]
+                global_dataframe = global_dataframe[global_dataframe['property_type'].astype(str).str.lower().isin(pt_list)]
         
         buyers_market_dataframe = global_dataframe[global_dataframe['category'] == 'buy']
         renters_market_dataframe = global_dataframe[global_dataframe['category'] == 'rent']

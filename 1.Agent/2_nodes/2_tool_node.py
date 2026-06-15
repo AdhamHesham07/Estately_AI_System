@@ -70,7 +70,14 @@ def _handle_search(current_state: AgentState, tool_execution_results: dict):
 
 def _handle_analyze(current_state: AgentState, tool_execution_results: dict):
     search_filters = current_state.get("current_filters", {})
-    user_query = current_state.get("raw_input", "")
+    
+    # Extract user_query from the last human message
+    user_query = ""
+    messages = current_state.get("messages", [])
+    for msg in reversed(messages):
+        if getattr(msg, "type", "") == "human":
+            user_query = getattr(msg, "content", "")
+            break
     
     # The new Strategy Layer: Invoke the complete Analyzer Intelligence Hub
     synthesis_report = DataBridge.execute_analyzer_synthesis(user_query, search_filters)
