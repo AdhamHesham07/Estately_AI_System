@@ -10,6 +10,8 @@
   <!-- Arabic font (lazy-loaded when needed) -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <!-- Alpine.js: reactive micro-framework (15KB, no build tools needed) -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
 
@@ -128,8 +130,28 @@
 
     </aside>
 
-    <!-- ── CHAT PANEL ── -->
-    <main class="chat-panel" id="chat-panel">
+    <!-- ✅ PHASE 3B: Alpine.js reactive chat panel
+         x-data holds the shared UI state object. All stateful interactions
+         (loading, send-button, typing indicator) bind to this single source of truth
+         instead of being scattered across imperative DOM mutations in chatbot.js -->
+    <main class="chat-panel" id="chat-panel"
+      x-data="{
+        isLoading: false,
+        inputValue: '',
+        charCount: 0,
+        maxChars: 500,
+        get canSend() { return this.inputValue.trim().length > 0 && !this.isLoading; },
+        get charLabel() { return this.charCount + ' / ' + this.maxChars; },
+        onInput(e) {
+          this.inputValue = e.target.value;
+          this.charCount = e.target.value.length;
+          // Sync with existing chatbot.js handler
+          if (window.onChatInput) window.onChatInput(e);
+        },
+        startLoading() { this.isLoading = true; },
+        stopLoading()  { this.isLoading = false; }
+      }"
+      x-init="$watch('isLoading', v => { window._alpineLoading = v; })">
 
       <!-- Chat header -->
       <div class="chat-header">
@@ -137,16 +159,17 @@
           <div class="agent-avatar-sm">🏠</div>
           <div class="chat-header-info">
             <p class="agent-name" id="chat-agent-name">Estately AI Assistant</p>
-            <p class="agent-status" id="chat-agent-status">Online — Real Estate Expert</p>
+            <p class="agent-status" id="chat-agent-status"
+               :class="isLoading ? 'status-thinking' : ''">
+              <span x-text="isLoading ? 'Thinking...' : 'Online — Real Estate Expert'"></span>
+            </p>
           </div>
         </div>
-        <div class="chat-header-actions">
-        </div>
+        <div class="chat-header-actions"></div>
       </div>
 
       <!-- Messages -->
       <div class="messages-area" id="messages-area">
-
         <!-- Welcome state (shown when no messages) -->
         <div class="welcome-state" id="welcome-state">
           <div class="welcome-icon">🏠</div>
@@ -159,10 +182,9 @@
             <button class="welcome-chip" onclick="usePrompt(this.dataset.prompt)" data-prompt="3-bedroom under 6 million EGP" id="wc-4">3-bed under 6M EGP</button>
           </div>
         </div>
-
       </div>
 
-      <!-- Input area -->
+      <!-- Input area (fully reactive via Alpine bindings) -->
       <div class="input-area">
         <div class="input-row" id="input-row">
           <textarea
@@ -170,16 +192,22 @@
             rows="1"
             placeholder="Describe your ideal property..."
             aria-label="Chat message input"
+            x-model="inputValue"
+            @input="onInput($event)"
+            :disabled="isLoading"
           ></textarea>
           <div class="input-actions">
-            <button class="send-btn" id="send-btn" title="Send message" disabled>
-              <i class='bx bx-send'></i>
+            <button class="send-btn" id="send-btn" title="Send message"
+              :disabled="!canSend"
+              :class="{ 'btn-loading': isLoading }"
+              @click="if (canSend && window.sendMessage) { startLoading(); window.sendMessage().finally(() => stopLoading()); }">
+              <i class='bx' :class="isLoading ? 'bx-loader-alt bx-spin' : 'bx-send'"></i>
             </button>
           </div>
         </div>
         <div class="input-footer">
           <span class="input-hint" id="input-hint">Press Enter to send · Shift+Enter for new line</span>
-          <span class="char-count" id="char-count">0 / 500</span>
+          <span class="char-count" id="char-count" x-text="charLabel">0 / 500</span>
         </div>
       </div>
 

@@ -335,6 +335,40 @@ function appendMessage(role, text) {
 }
 
 /* ─────────────────────────────────────────────
+   Render Property Cards
+   ───────────────────────────────────────────── */
+function renderPropertyCards(properties) {
+  const container = document.createElement('div');
+  container.className = 'property-cards-container';
+  
+  properties.forEach(prop => {
+    const card = document.createElement('div');
+    card.className = 'property-card';
+    
+    const priceStr = parseFloat(prop.price_egp || 0).toLocaleString() + ' EGP';
+    const titleStr = `${prop.bedrooms || '?'} Beds · ${prop.property_type || 'Property'} in ${prop.town || 'Egypt'}`;
+    const descStr = prop.analyzer_reasoning || 'Selected as a strong match based on your criteria.';
+    const linkStr = `https://estately.com/property/${prop.listing_id || ''}`;
+    
+    card.innerHTML = `
+      <div class="property-card-content">
+        <h4 class="property-card-price">${priceStr}</h4>
+        <p class="property-card-title">${titleStr}</p>
+        <div class="property-card-reasoning">
+          <strong>AI Analysis:</strong> ${descStr}
+        </div>
+      </div>
+      <a href="${linkStr}" target="_blank" class="property-card-btn">View Property</a>
+    `;
+    
+    container.appendChild(card);
+  });
+  
+  messagesArea.appendChild(container);
+  scrollToBottom();
+}
+
+/* ─────────────────────────────────────────────
    Show / hide typing indicator
    ───────────────────────────────────────────── */
 function showTyping() {
@@ -411,6 +445,10 @@ async function sendMessage() {
     removeTyping();
     if (data.reply) {
       appendMessage('agent', data.reply);
+      
+      if (data.recommended_properties && data.recommended_properties.length > 0) {
+        renderPropertyCards(data.recommended_properties);
+      }
     } else {
       appendMessage('agent', '⚠️ Error: ' + (data.error || 'Unknown error occurred.'));
     }

@@ -58,4 +58,5 @@ class ChatResponse(BaseModel):
     reply: str = Field(..., description="The AI agent's response")
     intent: Optional[str] = Field(default="unknown", description="The active intent detected by the agent")
     missing_info: Optional[List[str]] = Field(default=[], description="List of missing information fields")
+    recommended_properties: Optional[List[Dict[str, Any]]] = Field(default=None, description="Structured properties data to display as cards")
     error: Optional[str] = None

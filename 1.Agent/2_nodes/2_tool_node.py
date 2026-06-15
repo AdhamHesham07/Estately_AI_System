@@ -2,6 +2,7 @@ import os
 import sys
 import importlib
 from typing import Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Ensure absolute imports work from nodes up to the main agent root
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -57,13 +58,66 @@ def _handle_search(current_state: AgentState, tool_execution_results: dict):
     recommendation_results = DataBridge.execute_recommendation(search_filters)
     candidate_properties = recommendation_results.get("candidates", [])
     
-    property_analysis_briefs = []
-    for property_data in candidate_properties[:3]:
-        fair_price_brief = DataBridge.execute_fair_price_check(property_data, search_filters.get('category', 'buy'))
-        property_analysis_briefs.append({
+    # Extract user_query from the last human message
+    user_query = ""
+    messages = current_state.get("messages", [])
+    for msg in reversed(messages):
+        if getattr(msg, "type", "") == "human":
+            user_query = getattr(msg, "content", "")
+            break
+            
+    # Use Analyzer to intelligently pick the best 3 properties and provide reasoning
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "3.Analyzer")))
+        analyzer_llm = importlib.import_module("8_analyzer_llm")
+        selected_data = analyzer_llm.AnalyzerSynthesizer.analyze_and_select_top_properties(user_query, candidate_properties)
+        
+        # Merge reasoning back into candidates
+        selected_ids = {str(item.get("listing_id")): item.get("reasoning", "") for item in selected_data}
+        final_candidates = []
+        for prop in candidate_properties:
+            pid_str = str(prop.get("listing_id"))
+            if pid_str in selected_ids:
+                prop["analyzer_reasoning"] = selected_ids[pid_str]
+                final_candidates.append(prop)
+                
+        # Fallback if no match
+        if not final_candidates:
+            final_candidates = candidate_properties[:3]
+            
+    except Exception as e:
+        print(f"[ERROR] Analyzer intelligent selection failed: {e}")
+        final_candidates = candidate_properties[:3]
+        
+    recommendation_results["candidates"] = final_candidates
+    
+    # ✅ PHASE 3A: Parallelize per-property fair-price checks
+    # Each property's fair-price analysis is independent — run all 3 concurrently
+    category = search_filters.get('category', 'buy')
+    property_analysis_briefs = [None] * len(final_candidates)
+
+    def _fetch_brief(idx_prop):
+        idx, property_data = idx_prop
+        brief = DataBridge.execute_fair_price_check(property_data, category)
+        return idx, {
             "listing_id": property_data.get('listing_id'),
-            "analysis": fair_price_brief
-        })
+            "analysis": brief,
+            "analyzer_reasoning": property_data.get("analyzer_reasoning", "Selected based on criteria.")
+        }
+
+    with ThreadPoolExecutor(max_workers=min(3, len(final_candidates))) as pool:
+        futures = {pool.submit(_fetch_brief, (i, prop)): i for i, prop in enumerate(final_candidates)}
+        for future in as_completed(futures):
+            try:
+                idx, brief_result = future.result()
+                property_analysis_briefs[idx] = brief_result
+            except Exception as exc:
+                print(f"[WARNING] Fair-price check failed for a property: {exc}")
+
+    # Remove any None slots (failed calls)
+    property_analysis_briefs = [b for b in property_analysis_briefs if b is not None]
         
     tool_execution_results["recommendations"] = recommendation_results
     tool_execution_results["valuation_briefs"] = property_analysis_briefs

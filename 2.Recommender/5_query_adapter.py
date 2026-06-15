@@ -33,6 +33,45 @@ logger = logging.getLogger(__name__)
 # Global cache for models to avoid reloading on every query
 _LOADED_MODELS_CACHE = {}
 
+# --- Semantic Pre-Filter Index (real property descriptions) ---
+# Built lazily once and reused for all subsequent queries.
+_DESC_FAISS_INDEX = None
+_DESC_INDEX_IDS = None  # Parallel list: position i -> listing_id
+
+
+def _get_description_faiss_index(training_data: pd.DataFrame, model: SentenceTransformer):
+    """
+    Lazily builds (or returns cached) a FAISS index on real property description text.
+    This provides a semantic pre-filter channel that understands natural language
+    like 'cozy garden apartment' or 'modern sea-view villa'.
+    """
+    global _DESC_FAISS_INDEX, _DESC_INDEX_IDS
+    if _DESC_FAISS_INDEX is not None:
+        return _DESC_FAISS_INDEX, _DESC_INDEX_IDS
+
+    logger.info("--- [SEMANTIC PRE-FILTER] Building description FAISS index... ---")
+
+    descriptions = training_data["description"].fillna("").astype(str).tolist()
+    listing_ids = training_data["listing_id"].tolist()
+
+    # Encode in batches for memory efficiency
+    embeddings = model.encode(
+        descriptions,
+        batch_size=64,
+        normalize_embeddings=True,
+        show_progress_bar=False
+    ).astype("float32")
+
+    dim = embeddings.shape[1]
+    index = faiss.IndexFlatIP(dim)  # Inner-product (cosine after L2-norm)
+    faiss.normalize_L2(embeddings)
+    index.add(embeddings)
+
+    _DESC_FAISS_INDEX = index
+    _DESC_INDEX_IDS = listing_ids
+    logger.info(f"--- [SEMANTIC PRE-FILTER] Index built with {index.ntotal} vectors ---")
+    return _DESC_FAISS_INDEX, _DESC_INDEX_IDS
+
 class QueryAdapter:
     """
     Adapter to bridge external queries (e.g., from a Chatbot) to the TRUE Recommender system,
@@ -219,9 +258,29 @@ class QueryAdapter:
         query_embedding = loaded_models["sentence_transformer_model"].encode([query_text], normalize_embeddings=True)
         normalized_query_vector = normalize_query(query_embedding[0])
         
-        # 1a. Semantic Search (300 candidates)
+        # 1a. Synthetic-description FAISS Search (300 candidates)
         _, retrieved_candidate_ids = loaded_models["faiss_search_index"].search(normalized_query_vector, 300)
         semantic_candidate_indices = [int(x) for x in retrieved_candidate_ids[0] if x >= 0]
+
+        # ✅ NEW — 1b. Real-description Semantic Pre-Filter (natural language understanding)
+        # Searches the actual property descriptions (not synthetic text) to surface listings
+        # that match intent keywords like 'cozy', 'garden view', 'modern finishes', etc.
+        try:
+            desc_index, desc_ids = _get_description_faiss_index(
+                training_data, loaded_models["sentence_transformer_model"]
+            )
+            raw_query_vec = query_embedding[0].astype("float32").reshape(1, -1)
+            faiss.normalize_L2(raw_query_vec)
+            _, desc_hits = desc_index.search(raw_query_vec, 150)
+            desc_hit_ids = {str(desc_ids[int(i)]) for i in desc_hits[0] if i >= 0}
+            # Map desc hit IDs back to training_data integer indices
+            desc_hit_indices = training_data.index[
+                training_data["listing_id"].astype(str).isin(desc_hit_ids)
+            ].tolist()
+            logger.info(f"--- [SEMANTIC PRE-FILTER] Found {len(desc_hit_indices)} description matches ---")
+        except Exception as e:
+            logger.warning(f"[SEMANTIC PRE-FILTER] Skipped due to error: {e}")
+            desc_hit_indices = []
         
         # 1b. Geographic Exploration
         target_location = primary_location
@@ -278,8 +337,10 @@ class QueryAdapter:
         else:
             geographic_exploration_indices = []
             
-        # Combine and deduplicate
-        combined_candidate_indices = list(set(semantic_candidate_indices + geographic_exploration_indices))
+        # Combine and deduplicate all three retrieval channels
+        combined_candidate_indices = list(set(
+            semantic_candidate_indices + geographic_exploration_indices + desc_hit_indices
+        ))
         
         if not combined_candidate_indices:
             logger.warning("No candidates found.")

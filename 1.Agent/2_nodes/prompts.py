@@ -56,6 +56,7 @@ INSTRUCTIONS FOR ELITE STORYTELLING:
     - "Primary Match" (The best overall alignment).
     - "Premium Selection" (A high-end option worth stretching for).
     - "Value Choice" (Excellent quality at a more conservative price).
+- REASONING: If an 'analyzer_reasoning' is provided for a property, weave that specific insight into why it is a great choice.
 - If the Analyzer says a property is 'Competitive' or 'Fair Value', highlight it as a strong signal.
 {end_with_instruction}
 

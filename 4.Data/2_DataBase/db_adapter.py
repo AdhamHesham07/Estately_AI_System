@@ -1,11 +1,14 @@
 import os
 import sys
+import logging
 import pandas as pd
 from datetime import datetime
 
 # Ensure relative imports work
 sys.path.append(os.path.dirname(__file__))
 from db_connector import DatabaseConnector
+
+logger = logging.getLogger(__name__)
 
 class DBAdapter:
     """
@@ -31,7 +34,7 @@ class DBAdapter:
         engine = DatabaseConnector.get_engine()
         
         try:
-            print("--- [ADAPTER] Fetching RAW data from SQL Server ---")
+            logger.info("Fetching RAW data from database...")
 
             # Detect whether the DB has rent/sale fields (backward-compatible with older DB builds).
             try:
@@ -94,7 +97,7 @@ class DBAdapter:
             feat_df = pd.read_sql_query(feat_query, engine)
             
             # 3. Aggregate Features in Python (Safer than STRING_AGG for old SQL versions)
-            print("--- [ADAPTER] Aggregating amenities... ---")
+            logger.info("Aggregating amenities...")
             amenities_map = feat_df.groupby('PropertyID')['FeatureName'].apply(lambda x: ', '.join(x)).to_dict()
             
             prop_df['amenities'] = prop_df['listing_id'].map(amenities_map).fillna('')
@@ -107,11 +110,11 @@ class DBAdapter:
             
             result_df = prop_df[DBAdapter.REQUIRED_COLS]
             
-            print(f"--- [ADAPTER] Successfully fetched {len(result_df)} RAW records. ---")
+            logger.info(f"Successfully fetched {len(result_df)} RAW records.")
             return result_df
 
         except Exception as e:
-            print(f"!!! [ADAPTER_ERROR] Failed to fetch raw data: {e}")
+            logger.error(f"Failed to fetch raw data: {e}")
             return pd.DataFrame(columns=DBAdapter.REQUIRED_COLS)
 
 if __name__ == "__main__":

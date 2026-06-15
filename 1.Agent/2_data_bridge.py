@@ -3,6 +3,7 @@ import sys
 import json
 import importlib
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Ensure cross-module imports work by dynamically adjusting the system path
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -202,42 +203,64 @@ class DataBridge:
         The Analyzer Hierarchy Shift: The Analyzer acts as the intelligence hub.
         It intercepts the query, queries the RAG engine, checks Pandas, and evaluates tradeoffs,
         then uses its own LLM to synthesize an analytical response.
+        ✅ PHASE 3A: The 3 data streams (RAG, Market, Preferences) now run in PARALLEL.
         """
         try:
             knowledge_engine = importlib.import_module("7_knowledge_engine")
             analyzer_llm = importlib.import_module("8_analyzer_llm")
             preference_engine = importlib.import_module("4_preference_engine")
             
-            # 1. Qualitative Data
-            knowledge_context = knowledge_engine.KnowledgeEngine.retrieve_context(user_query)
-            
             # Normalize filters for Quantitative Analysis to prevent 0-result errors
             normalized_filters = current_filters.copy()
-            # Need a list of keys since we are modifying the dict during iteration
             for loc_key in list(normalized_filters.keys()):
                 if loc_key in ("city", "town", "district", "subdistrict") and normalized_filters.get(loc_key):
                     val = str(normalized_filters[loc_key])
-                    # If it's a comparison query, drop the strict location filter so the LLM gets global context
                     if " vs " in val.lower() or " and " in val.lower() or "قارن" in val.lower() or "," in val:
                         normalized_filters.pop(loc_key)
                         continue
-                        
                     resolved = DataBridge.resolve_location(val)
                     if resolved.get("value"):
                         resolved_level = resolved.get("level", loc_key)
                         normalized_filters[resolved_level] = resolved["value"]
                         if resolved_level != loc_key:
                             normalized_filters.pop(loc_key, None)
-                            
-            # 2. Quantitative Data
-            market_stats = market_engine.MarketPulse.get_snapshot(normalized_filters)
-            
-            # 3. Preference Data (Tradeoffs)
-            # The preference engine currently expects candidates to be generated, 
-            # so we'll grab what we can from it, or just use the current filters.
-            preference_data = preference_engine.PreferenceEngine.generate_tradeoff_advisor()
-            
-            # 4. Synthesize
+
+            # ✅ PHASE 3A: Fire all 3 independent data streams concurrently
+            knowledge_context = ""
+            market_stats = {}
+            preference_data = {}
+
+            def _fetch_knowledge():
+                return knowledge_engine.KnowledgeEngine.retrieve_context(user_query)
+
+            def _fetch_market():
+                return market_engine.MarketPulse.get_snapshot(normalized_filters)
+
+            def _fetch_preferences():
+                return preference_engine.PreferenceEngine.generate_tradeoff_advisor()
+
+            tasks = {
+                "knowledge": _fetch_knowledge,
+                "market":    _fetch_market,
+                "prefs":     _fetch_preferences,
+            }
+
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                future_map = {pool.submit(fn): key for key, fn in tasks.items()}
+                for future in as_completed(future_map):
+                    key = future_map[future]
+                    try:
+                        result = future.result()
+                        if key == "knowledge":
+                            knowledge_context = result
+                        elif key == "market":
+                            market_stats = result
+                        elif key == "prefs":
+                            preference_data = result
+                    except Exception as stream_err:
+                        logger.warning(f"[ANALYZER] Stream '{key}' failed: {stream_err}")
+
+            # Synthesize all 3 streams with the LLM
             synthesis = analyzer_llm.AnalyzerSynthesizer.synthesize_report(
                 user_query=user_query,
                 market_pulse_stats=market_stats,

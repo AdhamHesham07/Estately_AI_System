@@ -810,3 +810,121 @@ img { display: block; }
 .legal-links a:hover {
   color: var(--navy);
 }
+
+/* =============================================
+   PROPERTY CARDS (Analyzer Results)
+   ============================================= */
+.property-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.property-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.property-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--blue-light);
+}
+
+.property-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.property-card-price {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy);
+  letter-spacing: -0.5px;
+}
+
+.property-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.property-card-reasoning {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  background: var(--blue-bg);
+  padding: 10px;
+  border-radius: 8px;
+  border-left: 3px solid var(--blue);
+  margin-top: 6px;
+}
+
+.property-card-btn {
+  align-self: flex-start;
+  background: var(--navy);
+  color: var(--white);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background var(--transition);
+  text-align: center;
+}
+
+.property-card-btn:hover {
+  background: var(--blue);
+  color: white;
+}
+
+/* =============================================
+   ALPINE.JS REACTIVE STATE STYLES (Phase 3B)
+   ============================================= */
+
+/* Agent status bar — animated pulse when AI is thinking */
+.agent-status.status-thinking {
+  color: var(--blue);
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* Send button — spinner/loading state */
+.send-btn.btn-loading {
+  background: var(--navy-dark);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+/* Boxicons spin animation (used by bx-loader-alt when isLoading) */
+@keyframes bx-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.bx-spin {
+  display: inline-block;
+  animation: bx-spin 0.8s linear infinite;
+}
+
+/* Disabled textarea during loading */
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--gray-bg);
+}
+

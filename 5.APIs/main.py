@@ -1,9 +1,13 @@
 import os
 import sys
+import asyncio
+import logging
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
+
+logger = logging.getLogger(__name__)
 
 # Add project root to sys.path so we can import the other modules
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -39,13 +43,12 @@ try:
     build_agent_graph = import_module("4_graph_builder").build_agent_graph
     
     # Initialize the Agent graph once at startup
-    print("Initializing Agent Graph...")
+    logger.info("Initializing Agent Graph...")
     agent_app = build_agent_graph()
     
 except Exception as e:
     import traceback
-    print(f"Error importing core modules: {e}")
-    traceback.print_exc()
+    logger.critical(f"Error importing core modules: {e}", exc_info=True)
     # Still start the API but endpoints will fail, useful for debugging
     QueryAdapter = None
     FairPriceEstimator = None
@@ -127,7 +130,7 @@ def get_market_pulse():
 # 3. Agent Chatbot Endpoints
 # ==========================================
 @app.post("/api/v1/agent/chat", response_model=ChatResponse, tags=["Agent Chatbot"])
-def chat_with_agent(chat_input: ChatMessage):
+async def chat_with_agent(chat_input: ChatMessage):
     if not agent_app:
         raise HTTPException(status_code=500, detail="Agent module not initialized.")
     
@@ -136,16 +139,26 @@ def chat_with_agent(chat_input: ChatMessage):
         config = {"configurable": {"thread_id": chat_input.session_id}}
         inputs = {"messages": [HumanMessage(content=chat_input.message)], "user_language": chat_input.lang}
         
-        # Invoke the LangGraph agent
-        result = agent_app.invoke(inputs, config)
+        # ✅ FIX: Run the blocking LangGraph invoke in a thread pool executor
+        # This prevents blocking FastAPI's async event loop, enabling concurrent requests.
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: agent_app.invoke(inputs, config))
         
         # Extract the latest response message
         messages = result.get("messages", [])
         intent = result.get("active_intent", "unknown")
         missing_info = result.get("missing_info", [])
         
+        # Extract evidence_block to send as recommended_properties for UI cards
+        recommended_properties = []
+        if intent == "search":
+            response_plan = result.get("response_plan", {})
+            evidence_block = response_plan.get("evidence_block", [])
+            # Filter to make sure it contains property data (listing_id)
+            recommended_properties = [item for item in evidence_block if isinstance(item, dict) and "listing_id" in item]
+        
         if not messages:
-            return {"reply": "I'm sorry, I couldn't generate a response.", "intent": "unknown", "missing_info": []}
+            return {"reply": "I'm sorry, I couldn't generate a response.", "intent": "unknown", "missing_info": [], "recommended_properties": []}
             
         # Get the last message's content
         last_message = messages[-1]
@@ -154,11 +167,12 @@ def chat_with_agent(chat_input: ChatMessage):
         return {
             "reply": reply_text, 
             "intent": intent, 
-            "missing_info": missing_info
+            "missing_info": missing_info,
+            "recommended_properties": recommended_properties if recommended_properties else None
         }
         
     except Exception as e:
-         return {"reply": "", "error": str(e), "intent": "error", "missing_info": []}
+         return {"reply": "", "error": str(e), "intent": "error", "missing_info": [], "recommended_properties": None}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

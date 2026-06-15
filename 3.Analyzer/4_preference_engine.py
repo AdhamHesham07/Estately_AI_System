@@ -62,91 +62,26 @@ class PreferenceEngine:
         exact_matches_count = len(global_db[exact_mask])
         suggested_adjustments = []
         
-        # --- SCENARIO A: PRICED OUT OR TOO RESTRICTIVE (0-2 Matches) ---
-        if exact_matches_count <= 2:
-            # Tactic 1: Budget Expansion
-            if target_budget > 0:
-                budget_boost = target_budget * 1.3  # 30% increase
-                boost_mask = base_mask & (global_db['price_egp'] <= budget_boost)
-                if target_bedrooms > 0:
-                    boost_mask = boost_mask & (global_db['bedrooms'] == target_bedrooms)
-                boost_count = len(global_db[boost_mask])
-                if boost_count > exact_matches_count:
-                    suggested_adjustments.append({
-                        "strategy": "Budget Expansion",
-                        "change": f"Increase budget by 30% (to {budget_boost:,.0f} EGP)",
-                        "delta": f"+{boost_count - exact_matches_count} high-quality options unlocked."
-                    })
+        # Dynamically generate market summary for the LLM context
+        try:
+            market_engine = importlib.import_module("3_market_engine")
+            market_snapshot = market_engine.MarketPulse.get_snapshot(filters)
+            market_summary = json.dumps(market_snapshot, indent=2)
+        except Exception as e:
+            market_summary = "Market data unavailable."
             
-            # Tactic 2: Location Shift (Emerging Markets)
-            if target_town == "new cairo city" and target_budget > 0:
-                alt_mask = (global_db['category'].astype(str).str.lower() == target_category) & \
-                           (global_db['town'].astype(str).str.lower() == "mostakbal city") & \
-                           (global_db['price_egp'] <= target_budget)
-                if target_bedrooms > 0:
-                    alt_mask = alt_mask & (global_db['bedrooms'] == target_bedrooms)
-                alt_count = len(global_db[alt_mask])
-                if alt_count > exact_matches_count:
-                    suggested_adjustments.append({
-                        "strategy": "Location Pivot",
-                        "change": "Shift focus to Mostakbal City (adjacent to New Cairo)",
-                        "delta": f"Provides {alt_count} excellent options within your current budget."
-                    })
-                    
-            # Tactic 3: Property Type Shift (Downsizing)
-            if target_property_type == "villa" and target_budget > 0:
-                type_mask = (global_db['category'].astype(str).str.lower() == target_category) & \
-                            (global_db['property_type'].astype(str).str.lower().isin(['townhouse', 'twinhouse'])) & \
-                            (global_db['price_egp'] <= target_budget)
-                if target_town:
-                    type_mask = type_mask & (global_db['town'].astype(str).str.lower() == target_town)
-                type_count = len(global_db[type_mask])
-                if type_count > exact_matches_count:
-                    suggested_adjustments.append({
-                        "strategy": "Property Type Pivot",
-                        "change": "Consider a Townhouse or Twinhouse instead of a Standalone Villa",
-                        "delta": f"Unlocks {type_count} premium properties without breaking the budget."
-                    })
-                    
-            # Tactic 4: Completion Status Shift (Off-Plan)
-            if target_budget > 0:
-                offplan_mask = base_mask & (global_db['price_egp'] <= target_budget) & \
-                               (global_db['completion_status'].astype(str).str.lower() == 'under construction')
-                offplan_count = len(global_db[offplan_mask])
-                if offplan_count > exact_matches_count:
-                    suggested_adjustments.append({
-                        "strategy": "Investment Strategy Shift",
-                        "change": "Focus on Off-Plan properties with extended installment plans (7-10 years)",
-                        "delta": f"Reveals {offplan_count} developer-direct opportunities."
-                    })
-
-        # --- SCENARIO B: TIGHT MARKET (3-10 Matches) ---
-        elif exact_matches_count <= 10:
-            if target_bedrooms > 2:
-                flex_beds_mask = base_mask & (global_db['bedrooms'] >= (target_bedrooms - 1))
-                if target_budget > 0:
-                    flex_beds_mask = flex_beds_mask & (global_db['price_egp'] <= target_budget)
-                flex_count = len(global_db[flex_beds_mask])
-                if flex_count > exact_matches_count:
-                    suggested_adjustments.append({
-                        "strategy": "Bedroom Flexibility",
-                        "change": f"Be open to {target_bedrooms - 1} bedrooms",
-                        "delta": f"Expands your options to {flex_count} properties."
-                    })
-
-        # --- SCENARIO C: SPOILED FOR CHOICE (15+ Matches) ---
-        elif exact_matches_count > 15:
-            suggested_adjustments.append({
-                "strategy": "Premium Filtering",
-                "change": "You have a massive abundance of options in this bracket.",
-                "delta": "I highly recommend filtering by Tier-1 developers (like Emaar, SODIC, Palm Hills) or focusing purely on Ready-to-Move options to narrow down the absolute best investments."
-            })
-            
-        return {
-            "status": "success",
-            "catalog_exact_matches": exact_matches_count,
-            "adjustments": suggested_adjustments
-        }
+        # Call the LLM instead of using hardcoded rules
+        try:
+            analyzer_llm = importlib.import_module("8_analyzer_llm")
+            result = analyzer_llm.AnalyzerSynthesizer.generate_ai_tradeoffs(filters, exact_matches_count, market_summary)
+            return result
+        except Exception as e:
+            print(f"Failed to use LLM for tradeoffs: {e}")
+            return {
+                "status": "success",
+                "catalog_exact_matches": exact_matches_count,
+                "adjustments": []
+            }
         
     @staticmethod
     def generate_tradeoff_advisor(filters: dict = None) -> dict:

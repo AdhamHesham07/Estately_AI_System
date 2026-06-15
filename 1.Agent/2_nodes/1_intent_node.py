@@ -69,6 +69,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     
     max_retries_allowed = 2
     last_encountered_error = None
+    REQUIRED_INTENT_KEYS = {"intent", "filters", "confidence"}
     
     # 2. Sticky Fallback logic: Ensure we continue using the fallback model if the primary is down
     target_llm_model = current_state.get("active_model", PRIMARY_MODEL)
@@ -79,7 +80,7 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     
     # 3. Execute LLM Extraction Call with Retry Loop
     for retry_attempt in range(max_retries_allowed):
-        print(f"--- [BRAIN] Calling Model: {target_llm_model} ---")
+        print(f"--- [BRAIN] Calling Model: {target_llm_model} (attempt {retry_attempt + 1}/{max_retries_allowed}) ---")
         try:
             llm_response = litellm_completion_with_groq_key_fallback(
                 model=target_llm_model,
@@ -103,17 +104,31 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             raw_llm_content = llm_response.choices[0].message.content
             # Clean markdown code blocks from the JSON
             cleaned_json_string = raw_llm_content.replace("```json", "").replace("```", "").strip()
-            extracted_json_data = json.loads(cleaned_json_string)
-            if not isinstance(extracted_json_data, dict):
-                raise ValueError("LLM did not return a JSON object (dictionary).")
+            parsed_data = json.loads(cleaned_json_string)
+
+            # ✅ FIX: Validate required keys exist before accepting the result
+            if not isinstance(parsed_data, dict):
+                raise ValueError("LLM returned a non-dict JSON value.")
+            missing_keys = REQUIRED_INTENT_KEYS - parsed_data.keys()
+            if missing_keys:
+                raise ValueError(f"LLM JSON is missing required keys: {missing_keys}")
+
+            extracted_json_data = parsed_data
             last_encountered_error = None
             break  # Success
             
         except Exception as api_error:
             last_encountered_error = api_error
-            # Provide explicit feedback to the LLM on the next attempt if JSON parsing failed
+            print(f"!!! [BRAIN] Attempt {retry_attempt + 1} failed: {api_error}")
+            # ✅ FIX: On retry, inject a targeted correction prompt specifying the exact required format
             if retry_attempt < max_retries_allowed - 1:
-                history_for_llm += "\n(Note: Your previous response was not valid JSON. Please fix it.)"
+                history_for_llm += (
+                    "\n\n[SYSTEM CORRECTION]: Your previous response was invalid. "
+                    "You MUST return a JSON object with EXACTLY these keys: "
+                    "'intent' (string), 'filters' (object), 'confidence' (float 0-1), "
+                    "'out_of_domain' (bool), 'booking_info' (object), 'discussion_context' (object). "
+                    "Output ONLY the JSON object. No prose, no markdown fences."
+                )
 
     # 4. Handle Unrecoverable API Errors (e.g. Quota exhaustion)
     if last_encountered_error is not None:
