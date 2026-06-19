@@ -1,6 +1,8 @@
 import os
 import sys
 import importlib
+import re
+import json
 from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -10,6 +12,35 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 AgentState = importlib.import_module("3_state_definition").AgentState
 DataBridge = importlib.import_module("2_data_bridge").DataBridge
 BookingEngine = importlib.import_module("3_sceduler.booking_logic").BookingEngine
+
+DEMO_PROPERTY_IMAGES = [
+    "assets/property-1.png",
+    "assets/property-2.png",
+    "assets/property-3.png",
+]
+
+LOCATION_ALIASES = {
+    "fifth settlement": {"town": "New Cairo City", "district": "The 5th Settlement"},
+    "5th settlement": {"town": "New Cairo City", "district": "The 5th Settlement"},
+    "tagamoa": {"town": "New Cairo City", "district": "The 5th Settlement"},
+    "new cairo": {"town": "New Cairo City"},
+    "sheikh zayed": {"town": "Sheikh Zayed City"},
+    "zayed": {"town": "Sheikh Zayed City"},
+    "maadi": {"town": "Maadi"},
+    "heliopolis": {"town": "Heliopolis"},
+}
+
+def _attach_demo_image(prop: dict) -> dict:
+    if not prop:
+        return prop
+    if not prop.get("image_url"):
+        listing_key = str(prop.get("listing_id") or "")
+        image_index = sum(ord(ch) for ch in listing_key) % len(DEMO_PROPERTY_IMAGES)
+        prop["image_url"] = DEMO_PROPERTY_IMAGES[image_index]
+    return prop
+
+def _attach_demo_images(properties: list) -> list:
+    return [_attach_demo_image(prop) for prop in (properties or [])]
 
 def _resolve_discussion_listing_ids(current_state: AgentState) -> list:
     discussion_context = current_state.get("discussion_context", {}) or {}
@@ -51,47 +82,48 @@ def _build_property_fact(prop: dict) -> dict:
         "property_type": prop.get("property_type"),
         "payment_method": prop.get("payment_method"),
         "completion_status": prop.get("completion_status"),
+        "image_url": prop.get("image_url"),
     }
+
+def _select_search_page(current_state: AgentState, tool_execution_results: dict) -> tuple:
+    existing_pool = tool_execution_results.get("recommendation_pool") or []
+    if current_state.get("dialogue_act") == "show_more" and existing_pool:
+        offset = int(tool_execution_results.get("recommendation_offset", 3) or 3)
+        selected = existing_pool[offset:offset + 3]
+        if not selected:
+            offset = 0
+            selected = existing_pool[:3]
+        is_vague = (tool_execution_results.get("recommendations") or {}).get("is_vague", False)
+        return selected, existing_pool, offset + len(selected), True, is_vague
+
+    recommendation_results = DataBridge.execute_recommendation(current_state.get("current_filters", {}))
+    pool = recommendation_results.get("candidates", [])
+    selected = pool[:3]
+    return selected, pool, len(selected), False, recommendation_results.get("is_vague", False)
 
 def _handle_search(current_state: AgentState, tool_execution_results: dict):
     search_filters = current_state.get("current_filters", {})
-    recommendation_results = DataBridge.execute_recommendation(search_filters)
-    candidate_properties = recommendation_results.get("candidates", [])
-    
-    # Extract user_query from the last human message
-    user_query = ""
-    messages = current_state.get("messages", [])
-    for msg in reversed(messages):
-        if getattr(msg, "type", "") == "human":
-            user_query = getattr(msg, "content", "")
-            break
-            
-    # Use Analyzer to intelligently pick the best 3 properties and provide reasoning
-    try:
-        import sys
-        import os
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "3.Analyzer")))
-        analyzer_llm = importlib.import_module("8_analyzer_llm")
-        selected_data = analyzer_llm.AnalyzerSynthesizer.analyze_and_select_top_properties(user_query, candidate_properties)
-        
-        # Merge reasoning back into candidates
-        selected_ids = {str(item.get("listing_id")): item.get("reasoning", "") for item in selected_data}
-        final_candidates = []
-        for prop in candidate_properties:
-            pid_str = str(prop.get("listing_id"))
-            if pid_str in selected_ids:
-                prop["analyzer_reasoning"] = selected_ids[pid_str]
-                final_candidates.append(prop)
-                
-        # Fallback if no match
-        if not final_candidates:
-            final_candidates = candidate_properties[:3]
-            
-    except Exception as e:
-        print(f"[ERROR] Analyzer intelligent selection failed: {e}")
-        final_candidates = candidate_properties[:3]
-        
-    recommendation_results["candidates"] = final_candidates
+    final_candidates, recommendation_pool, next_offset, is_more_request, is_vague = _select_search_page(
+        current_state, tool_execution_results
+    )
+
+    for prop in final_candidates:
+        prop["analyzer_reasoning"] = (
+            "Additional option from your saved recommendation pool."
+            if is_more_request
+            else "Selected by the recommender based on your budget, location, and property preferences."
+        )
+
+    _attach_demo_images(final_candidates)
+    _attach_demo_images(recommendation_pool)
+
+    recommendation_results = {
+        "candidates": final_candidates,
+        "pool_size": len(recommendation_pool),
+        "next_offset": next_offset,
+        "has_more": next_offset < len(recommendation_pool),
+        "is_vague": is_vague,
+    }
     
     # ✅ PHASE 3A: Parallelize per-property fair-price checks
     # Each property's fair-price analysis is independent — run all 3 concurrently
@@ -120,22 +152,93 @@ def _handle_search(current_state: AgentState, tool_execution_results: dict):
     property_analysis_briefs = [b for b in property_analysis_briefs if b is not None]
         
     tool_execution_results["recommendations"] = recommendation_results
+    tool_execution_results["recommendation_pool"] = recommendation_pool
+    tool_execution_results["recommendation_offset"] = next_offset
     tool_execution_results["valuation_briefs"] = property_analysis_briefs
+
+def _latest_user_query(current_state: AgentState) -> str:
+    messages = current_state.get("messages", [])
+    for msg in reversed(messages):
+        if getattr(msg, "type", "") == "human":
+            return getattr(msg, "content", "") or ""
+    return ""
+
+def _area_filters_from_phrase(area_phrase: str) -> dict:
+    normalized = re.sub(r"[^a-z0-9\s]", " ", str(area_phrase or "").lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    for alias, filters in LOCATION_ALIASES.items():
+        if alias in normalized:
+            return filters.copy()
+    return {"town": area_phrase.strip()} if area_phrase.strip() else {}
+
+def _extract_comparison_area_filters(user_query: str) -> list:
+    normalized = str(user_query or "").lower()
+    if not any(token in normalized for token in (" vs ", " versus ", " compare ")):
+        return []
+
+    cleaned = re.sub(r"\bcompare\b", " ", normalized)
+    cleaned = re.sub(r"\b(apartment|apartments|villa|villas|property|properties|prices|price|market|in|between|for)\b", " ", cleaned)
+    parts = re.split(r"\s+(?:vs|versus)\s+", cleaned, maxsplit=1)
+    if len(parts) != 2:
+        return []
+
+    left_filters = _area_filters_from_phrase(parts[0])
+    right_filters = _area_filters_from_phrase(parts[1])
+    return [filters for filters in (left_filters, right_filters) if filters]
+
+def _build_comparison_samples(current_state: AgentState, search_filters: dict, user_query: str) -> list:
+    area_filters = _extract_comparison_area_filters(user_query)
+    if len(area_filters) < 2:
+        return []
+
+    comparison_samples = []
+    base_filters = search_filters.copy()
+    base_filters.setdefault("category", "buy")
+    if not any(base_filters.get(key) for key in ("price_egp", "price_min", "price_max")):
+        if base_filters.get("category") == "rent":
+            base_filters["price_min"] = 0
+            base_filters["price_max"] = 5_000_000
+        else:
+            base_filters["price_min"] = 0
+            base_filters["price_max"] = 200_000_000
+    for area_filter in area_filters[:2]:
+        sample_filters = base_filters.copy()
+        for location_key in ("city", "town", "district", "subdistrict"):
+            sample_filters.pop(location_key, None)
+        sample_filters.update(area_filter)
+
+        results = DataBridge.execute_recommendation(sample_filters)
+        candidates = _attach_demo_images((results.get("candidates") or [])[:3])
+        area_label = area_filter.get("district") or area_filter.get("town") or area_filter.get("city")
+        for prop in candidates:
+            prop["analyzer_reasoning"] = (
+                f"Representative {sample_filters.get('property_type', 'property')} sample from {area_label} "
+                "for this area comparison."
+            )
+        comparison_samples.append({
+            "area": area_label,
+            "filters": sample_filters,
+            "candidates": candidates,
+        })
+    return comparison_samples
 
 def _handle_analyze(current_state: AgentState, tool_execution_results: dict):
     search_filters = current_state.get("current_filters", {})
     
     # Extract user_query from the last human message
-    user_query = ""
-    messages = current_state.get("messages", [])
-    for msg in reversed(messages):
-        if getattr(msg, "type", "") == "human":
-            user_query = getattr(msg, "content", "")
-            break
+    user_query = _latest_user_query(current_state)
     
     # The new Strategy Layer: Invoke the complete Analyzer Intelligence Hub
     synthesis_report = DataBridge.execute_analyzer_synthesis(user_query, search_filters)
+    comparison_samples = _build_comparison_samples(current_state, search_filters, user_query)
+    if comparison_samples:
+        synthesis_report = (
+            f"{synthesis_report}\n\n"
+            "LIVE LISTING SAMPLES FOR THIS COMPARISON:\n"
+            f"{json.dumps(comparison_samples, indent=2)}"
+        )
     tool_execution_results["analyzer_synthesis"] = synthesis_report
+    tool_execution_results["comparison_samples"] = comparison_samples
 
 def _handle_book(current_state: AgentState, tool_execution_results: dict):
     booking_registration_result = BookingEngine.register_booking(current_state.get("booking_details", {}))

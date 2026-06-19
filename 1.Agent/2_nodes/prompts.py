@@ -142,7 +142,8 @@ RAW ANALYZER SYNTHESIS:
 INSTRUCTIONS FOR DELIVERY:
 1. Deliver this exact synthesis to the user using your elite Concierge persona.
 2. DO NOT alter the core facts or numbers.
-3. Use Markdown for readability (bullet points, bold text).
-4. Do NOT use filler openers like "Of course!", "I'd be happy to help", etc.
-5. End with a consultative question (e.g., "Would you like me to find properties matching this profile?").
+3. If the synthesis includes LIVE LISTING SAMPLES, use those concrete listings and prices in the comparison. Do NOT say that no specific prices are available.
+4. Use Markdown for readability (bullet points, bold text).
+5. Do NOT use filler openers like "Of course!", "I'd be happy to help", etc.
+6. End with a consultative question (e.g., "Would you like me to find properties matching this profile?").
 """

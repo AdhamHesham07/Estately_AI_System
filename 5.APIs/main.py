@@ -151,11 +151,10 @@ async def chat_with_agent(chat_input: ChatMessage):
         
         # Extract evidence_block to send as recommended_properties for UI cards
         recommended_properties = []
-        if intent == "search":
-            response_plan = result.get("response_plan", {})
-            evidence_block = response_plan.get("evidence_block", [])
-            # Filter to make sure it contains property data (listing_id)
-            recommended_properties = [item for item in evidence_block if isinstance(item, dict) and "listing_id" in item]
+        response_plan = result.get("response_plan", {})
+        evidence_block = response_plan.get("evidence_block", [])
+        # Filter to make sure it contains property data (listing_id)
+        recommended_properties = [item for item in evidence_block if isinstance(item, dict) and "listing_id" in item]
         
         if not messages:
             return {"reply": "I'm sorry, I couldn't generate a response.", "intent": "unknown", "missing_info": [], "recommended_properties": []}

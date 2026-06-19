@@ -371,6 +371,131 @@ function renderPropertyCards(properties) {
 /* ─────────────────────────────────────────────
    Show / hide typing indicator
    ───────────────────────────────────────────── */
+function createPropertyCard(prop) {
+  const card = document.createElement('div');
+  card.className = 'property-card';
+
+  const priceNumber = parseFloat(prop.price_egp || 0);
+  const priceStr = priceNumber ? priceNumber.toLocaleString() + ' EGP' : 'Price on request';
+  const titleStr = prop.title || `${prop.bedrooms || '?'} Beds - ${prop.property_type || 'Property'} in ${prop.district || prop.town || 'Egypt'}`;
+  const metaStr = [
+    prop.property_type || 'Property',
+    prop.bedrooms ? `${prop.bedrooms} beds` : null,
+    prop.bathrooms ? `${prop.bathrooms} baths` : null,
+    prop.area_value ? `${prop.area_value} sqm` : null,
+  ].filter(Boolean).join(' - ');
+  const locationStr = [prop.subdistrict, prop.district, prop.town].filter(Boolean).join(', ') || 'Egypt';
+  const descStr = prop.analyzer_reasoning || 'Selected as a strong match based on your criteria.';
+  const linkStr = `https://estately.com/property/${prop.listing_id || ''}`;
+  const imageStr = prop.image_url || prop.image || prop.photo_url || 'assets/property-1.png';
+
+  card.innerHTML = `
+    <div class="property-card-media">
+      <img src="${imageStr}" alt="${titleStr}" loading="lazy" onerror="this.src='assets/property-1.png'">
+    </div>
+    <div class="property-card-content">
+      <h4 class="property-card-price">${priceStr}</h4>
+      <p class="property-card-title">${titleStr}</p>
+      <p class="property-card-meta">${metaStr}</p>
+      <p class="property-card-location">${locationStr}</p>
+      <div class="property-card-reasoning">
+        <strong>Why this one:</strong> ${descStr}
+      </div>
+    </div>
+    <a href="${linkStr}" target="_blank" class="property-card-btn">View Property</a>
+  `;
+
+  return card;
+}
+
+function renderPropertyCards(properties) {
+  const container = document.createElement('div');
+  container.className = 'property-cards-container';
+
+  properties.forEach(prop => {
+    container.appendChild(createPropertyCard(prop));
+  });
+
+  messagesArea.appendChild(container);
+  scrollToBottom();
+}
+
+function buildPropertyNarrative(prop, index, replyText) {
+  const listingId = prop.listing_id ? String(prop.listing_id) : '';
+  const replySections = String(replyText || '').split(/\n\s*\n|(?=\n?\d+[\).\s])|(?=\n?- )/);
+  const matchedSection = listingId
+    ? replySections.find(section => section.includes(listingId))
+    : null;
+  if (matchedSection && matchedSection.trim().length > 30) {
+    return matchedSection.trim();
+  }
+
+  const priceNumber = parseFloat(prop.price_egp || 0);
+  const priceText = priceNumber ? `${priceNumber.toLocaleString()} EGP` : 'price on request';
+  const locationText = [prop.subdistrict, prop.district, prop.town].filter(Boolean).join(', ') || 'Egypt';
+  const specs = [
+    prop.bedrooms ? `${prop.bedrooms} bedrooms` : null,
+    prop.bathrooms ? `${prop.bathrooms} bathrooms` : null,
+    prop.area_value ? `${prop.area_value} sqm` : null,
+  ].filter(Boolean).join(', ');
+  const title = prop.title || `${prop.property_type || 'Property'} in ${locationText}`;
+  const reason = prop.analyzer_reasoning || 'It matches the main filters you asked for.';
+
+  return `Option ${index + 1}: **${title}** is listed at **${priceText}** in **${locationText}**${specs ? `, with ${specs}` : ''}. ${reason}`;
+}
+
+function renderPropertyStory(replyText, properties) {
+  const firstParagraph = String(replyText || '').split(/\n\s*\n/).find(part => part.trim()) || '';
+  const introMentionsListing = properties.some(prop => prop.listing_id && firstParagraph.includes(String(prop.listing_id)));
+  const introText = firstParagraph.trim() && !introMentionsListing && firstParagraph.length < 260
+    ? firstParagraph.trim()
+    : 'Here are the strongest matches I found, with each option shown right after its explanation.';
+
+  if (welcomeState) welcomeState.style.display = 'none';
+
+  const id = `msg-${++messageIdCounter}`;
+  const time = nowTime();
+  const row = document.createElement('div');
+  row.className = 'message-row agent-row property-story-row';
+  row.id = id;
+
+  const body = document.createElement('div');
+  body.className = 'bubble property-story-bubble';
+
+  const intro = document.createElement('div');
+  intro.className = 'property-story-intro';
+  intro.innerHTML = renderMarkdown(introText);
+  body.appendChild(intro);
+
+  properties.forEach((prop, index) => {
+    const item = document.createElement('div');
+    item.className = 'property-story-item';
+
+    const narrative = document.createElement('div');
+    narrative.className = 'property-story-text';
+    narrative.innerHTML = renderMarkdown(buildPropertyNarrative(prop, index, replyText));
+
+    item.appendChild(narrative);
+    item.appendChild(createPropertyCard(prop));
+    body.appendChild(item);
+  });
+
+  row.innerHTML = '<div class="bubble-avatar" aria-hidden="true">AI</div>';
+
+  const wrapper = document.createElement('div');
+  wrapper.appendChild(body);
+  const timeEl = document.createElement('p');
+  timeEl.className = 'bubble-time';
+  timeEl.textContent = time;
+  wrapper.appendChild(timeEl);
+  row.appendChild(wrapper);
+
+  messagesArea.appendChild(row);
+  scrollToBottom();
+  messages.push({ role: 'agent', text: replyText, time });
+  return id;
+}
+
 function showTyping() {
   removeTyping();
   const row = document.createElement('div');
@@ -444,10 +569,10 @@ async function sendMessage() {
     
     removeTyping();
     if (data.reply) {
-      appendMessage('agent', data.reply);
-      
       if (data.recommended_properties && data.recommended_properties.length > 0) {
-        renderPropertyCards(data.recommended_properties);
+        renderPropertyStory(data.reply, data.recommended_properties);
+      } else {
+        appendMessage('agent', data.reply);
       }
     } else {
       appendMessage('agent', '⚠️ Error: ' + (data.error || 'Unknown error occurred.'));

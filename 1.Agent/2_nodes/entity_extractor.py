@@ -86,6 +86,14 @@ def extract_entities_via_regex(user_text: str) -> dict:
 
 def detect_dialogue_act(latest_user_message: str) -> str:
     normalized = f" {str(latest_user_message or '').lower()} "
+    show_more_triggers = [
+        " more recommendations ", " more options ", " more properties ",
+        " show me more ", " show more ", " any other options ",
+        " other options ", " next options ", " next recommendations ",
+        " another option ", " alternatives "
+    ]
+    if any(token in normalized for token in show_more_triggers):
+        return "show_more"
     if any(token in normalized for token in [" compare ", " vs ", " versus ", " difference ", " better "]):
         return "compare"
     if any(token in normalized for token in [" details ", " tell me more ", " more about ", " explain ", " pros ", " cons "]):

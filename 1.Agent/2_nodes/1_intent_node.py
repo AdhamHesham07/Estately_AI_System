@@ -3,6 +3,7 @@ import sys
 import json
 import importlib
 import re
+from datetime import date, timedelta
 from typing import Dict, Any
 from dotenv import load_dotenv
 import litellm
@@ -162,7 +163,9 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             
     # Priority 2: Apply Safety Net results (only if LLM completely missed them)
     for filter_key, filter_value in regex_extracted_data.items():
-        if not merged_filters.get(filter_key):
+        if filter_key == "property_type" and merged_filters.get(filter_key) == "Apartment,Villa":
+            merged_filters[filter_key] = filter_value
+        elif not merged_filters.get(filter_key):
             merged_filters[filter_key] = filter_value
 
     # EXPERT LOGIC: Enforce budget typecasting safely
@@ -201,6 +204,34 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
     }
     carry_forward_slots = merged_filters.copy()
 
+    normalized_latest_message = f" {latest_user_message_for_regex.lower()} "
+    booking_keywords = [" book ", " booking ", " appointment ", " visit ", " viewing ", " see in person ", " examine "]
+    if any(keyword in normalized_latest_message for keyword in booking_keywords):
+        detected_intent = "book"
+
+        phone_match = re.search(r"\b(01\d{9}|(?:\+?20)?1\d{9})\b", latest_user_message_for_regex)
+        if phone_match and not merged_booking_details.get("phone"):
+            merged_booking_details["phone"] = phone_match.group(1)
+
+        name_patterns = [
+            r"\bfor\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:,\s*phone|\s+phone|\s+on\s+|\s+at\s+|\s+tomorrow|\s+today|$)",
+            r"\bmy name is\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:,\s*phone|\s+phone|\s+on\s+|\s+at\s+|\s+tomorrow|\s+today|$)",
+            r"\bname\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:,\s*phone|\s+phone|\s+on\s+|\s+at\s+|\s+tomorrow|\s+today|$)",
+        ]
+        for pattern in name_patterns:
+            name_match = re.search(pattern, latest_user_message_for_regex, flags=re.IGNORECASE)
+            if name_match and not merged_booking_details.get("user_name"):
+                merged_booking_details["user_name"] = name_match.group(1).strip(" ,.")
+                break
+
+        explicit_date_match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", latest_user_message_for_regex)
+        if explicit_date_match and not merged_booking_details.get("date"):
+            merged_booking_details["date"] = explicit_date_match.group(1)
+        elif " tomorrow " in normalized_latest_message and str(merged_booking_details.get("date", "")).lower() in {"", "tomorrow"}:
+            merged_booking_details["date"] = (date.today() + timedelta(days=1)).isoformat()
+        elif " today " in normalized_latest_message and str(merged_booking_details.get("date", "")).lower() in {"", "today"}:
+            merged_booking_details["date"] = date.today().isoformat()
+
     # Build fresh ordinal map from recent properties whenever available.
     recent_properties = current_state.get("recent_properties", []) or []
     reference_map = previous_reference_map.copy()
@@ -223,6 +254,12 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
             resolved_reference_ids.append(str(previous_focus_listing_id))
     if resolved_reference_ids:
         discussion_context["property_ids"] = resolved_reference_ids
+
+    if detected_intent == "book" and not merged_booking_details.get("property_id"):
+        if resolved_reference_ids:
+            merged_booking_details["property_id"] = str(resolved_reference_ids[0])
+        elif previous_focus_listing_id:
+            merged_booking_details["property_id"] = str(previous_focus_listing_id)
     
     if detected_intent == "search":
         has_location = any(merged_filters.get(k) for k in ("town", "district", "subdistrict"))
@@ -260,6 +297,9 @@ def intent_node(current_state: AgentState) -> Dict[str, Any]:
         for field in ("property_type", "category"):
             if field not in merged_filters:
                 missing_required_fields.append(field)
+    if dialogue_act == "show_more" and current_state.get("tool_outputs", {}).get("recommendation_pool"):
+        detected_intent = "search"
+        missing_required_fields = []
 
     response_mode = "tool_required"
     if missing_required_fields:

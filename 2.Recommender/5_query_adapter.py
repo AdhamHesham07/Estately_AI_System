@@ -7,6 +7,7 @@ import importlib
 import logging
 import faiss
 import xgboost as xgb
+from cachetools import TTLCache
 from sentence_transformers import SentenceTransformer
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -27,49 +28,58 @@ calculate_jaccard = features_module.calculate_jaccard
 
 CONTRACTS_DIR = os.path.join(BASE_DIR, "4.Data", "1_Contracts")
 CANDIDATES_CONTRACT_FILE = os.path.join(CONTRACTS_DIR, "Rec_To_Ana_Candidates.json")
+DESC_FAISS_INDEX_FILE = os.path.join(CONFIG["paths"]["artifacts"], "description_faiss.index")
+DESC_IDS_FILE = os.path.join(CONFIG["paths"]["cache"], "description_ids.joblib")
 
 logger = logging.getLogger(__name__)
 
 # Global cache for models to avoid reloading on every query
 _LOADED_MODELS_CACHE = {}
+_QUERY_EMBEDDING_CACHE = TTLCache(maxsize=512, ttl=3600)
 
 # --- Semantic Pre-Filter Index (real property descriptions) ---
-# Built lazily once and reused for all subsequent queries.
+# Loaded lazily once and reused for all subsequent queries.
 _DESC_FAISS_INDEX = None
 _DESC_INDEX_IDS = None  # Parallel list: position i -> listing_id
 
 
-def _get_description_faiss_index(training_data: pd.DataFrame, model: SentenceTransformer):
+def _get_cached_query_embedding(model: SentenceTransformer, query_text: str) -> np.ndarray:
     """
-    Lazily builds (or returns cached) a FAISS index on real property description text.
+    Embeds the synthetic query text once per unique query for a short-lived process cache.
+    """
+    cache_key = query_text.strip().lower()
+    if cache_key in _QUERY_EMBEDDING_CACHE:
+        return _QUERY_EMBEDDING_CACHE[cache_key]
+
+    embedding = model.encode([query_text], normalize_embeddings=True)[0].astype("float32")
+    _QUERY_EMBEDDING_CACHE[cache_key] = embedding
+    return embedding
+
+
+def _get_description_faiss_index():
+    """
+    Lazily loads a prebuilt FAISS index on real property description text.
     This provides a semantic pre-filter channel that understands natural language
     like 'cozy garden apartment' or 'modern sea-view villa'.
+
+    Important: this function never embeds all descriptions during a live request.
+    Build the optional index offline with build_description_index.py.
     """
     global _DESC_FAISS_INDEX, _DESC_INDEX_IDS
     if _DESC_FAISS_INDEX is not None:
         return _DESC_FAISS_INDEX, _DESC_INDEX_IDS
 
-    logger.info("--- [SEMANTIC PRE-FILTER] Building description FAISS index... ---")
+    if not (os.path.exists(DESC_FAISS_INDEX_FILE) and os.path.exists(DESC_IDS_FILE)):
+        logger.info(
+            "[SEMANTIC PRE-FILTER] Prebuilt description index not found. "
+            "Skipping optional description channel."
+        )
+        return None, None
 
-    descriptions = training_data["description"].fillna("").astype(str).tolist()
-    listing_ids = training_data["listing_id"].tolist()
-
-    # Encode in batches for memory efficiency
-    embeddings = model.encode(
-        descriptions,
-        batch_size=64,
-        normalize_embeddings=True,
-        show_progress_bar=False
-    ).astype("float32")
-
-    dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)  # Inner-product (cosine after L2-norm)
-    faiss.normalize_L2(embeddings)
-    index.add(embeddings)
-
-    _DESC_FAISS_INDEX = index
-    _DESC_INDEX_IDS = listing_ids
-    logger.info(f"--- [SEMANTIC PRE-FILTER] Index built with {index.ntotal} vectors ---")
+    logger.info("[SEMANTIC PRE-FILTER] Loading prebuilt description FAISS index...")
+    _DESC_FAISS_INDEX = faiss.read_index(DESC_FAISS_INDEX_FILE)
+    _DESC_INDEX_IDS = load_cache("description_ids.joblib")
+    logger.info(f"[SEMANTIC PRE-FILTER] Loaded {len(_DESC_INDEX_IDS or [])} description ids.")
     return _DESC_FAISS_INDEX, _DESC_INDEX_IDS
 
 class QueryAdapter:
@@ -255,8 +265,10 @@ class QueryAdapter:
         query_text = query_row['synthetic_description']
         
         # 1. RETRIEVAL LAYER (Semantic + Geographic Exploration)
-        query_embedding = loaded_models["sentence_transformer_model"].encode([query_text], normalize_embeddings=True)
-        normalized_query_vector = normalize_query(query_embedding[0])
+        query_embedding_vector = _get_cached_query_embedding(
+            loaded_models["sentence_transformer_model"], query_text
+        )
+        normalized_query_vector = normalize_query(query_embedding_vector)
         
         # 1a. Synthetic-description FAISS Search (300 candidates)
         _, retrieved_candidate_ids = loaded_models["faiss_search_index"].search(normalized_query_vector, 300)
@@ -266,18 +278,19 @@ class QueryAdapter:
         # Searches the actual property descriptions (not synthetic text) to surface listings
         # that match intent keywords like 'cozy', 'garden view', 'modern finishes', etc.
         try:
-            desc_index, desc_ids = _get_description_faiss_index(
-                training_data, loaded_models["sentence_transformer_model"]
-            )
-            raw_query_vec = query_embedding[0].astype("float32").reshape(1, -1)
-            faiss.normalize_L2(raw_query_vec)
-            _, desc_hits = desc_index.search(raw_query_vec, 150)
-            desc_hit_ids = {str(desc_ids[int(i)]) for i in desc_hits[0] if i >= 0}
-            # Map desc hit IDs back to training_data integer indices
-            desc_hit_indices = training_data.index[
-                training_data["listing_id"].astype(str).isin(desc_hit_ids)
-            ].tolist()
-            logger.info(f"--- [SEMANTIC PRE-FILTER] Found {len(desc_hit_indices)} description matches ---")
+            desc_index, desc_ids = _get_description_faiss_index()
+            if desc_index is not None and desc_ids:
+                raw_query_vec = query_embedding_vector.astype("float32").reshape(1, -1)
+                faiss.normalize_L2(raw_query_vec)
+                _, desc_hits = desc_index.search(raw_query_vec, 150)
+                desc_hit_ids = {str(desc_ids[int(i)]) for i in desc_hits[0] if i >= 0}
+                # Map desc hit IDs back to training_data integer indices
+                desc_hit_indices = training_data.index[
+                    training_data["listing_id"].astype(str).isin(desc_hit_ids)
+                ].tolist()
+                logger.info(f"--- [SEMANTIC PRE-FILTER] Found {len(desc_hit_indices)} description matches ---")
+            else:
+                desc_hit_indices = []
         except Exception as e:
             logger.warning(f"[SEMANTIC PRE-FILTER] Skipped due to error: {e}")
             desc_hit_indices = []
@@ -366,6 +379,17 @@ class QueryAdapter:
         # 2. Category Filter (Buy vs Rent) - Non-negotiable
         target_category = str(query.get('category', 'buy')).lower()
         candidate_properties = candidate_properties[candidate_properties['category'].fillna('unknown').astype(str).str.lower() == target_category]
+
+        # 2b. Property Type Filter - Non-negotiable when the user specified types
+        target_property_types = [
+            t.strip().lower()
+            for t in str(query.get('property_type', '')).split(',')
+            if t and t.strip()
+        ]
+        if target_property_types:
+            type_mask = candidate_properties['property_type'].fillna('').astype(str).str.lower().isin(target_property_types)
+            if type_mask.any():
+                candidate_properties = candidate_properties[type_mask]
         
         # 3. Budget Consideration
         candidate_properties['price_egp'] = pd.to_numeric(candidate_properties['price_egp'], errors='coerce')
@@ -374,17 +398,15 @@ class QueryAdapter:
                 budget_lo = float(query['price_min'])
                 budget_hi = float(query['price_max'])
                 candidate_properties = candidate_properties[
-                    (candidate_properties['price_egp'] >= budget_lo * 0.98)
-                    & (candidate_properties['price_egp'] <= budget_hi * 1.02)
+                    (candidate_properties['price_egp'] >= budget_lo)
+                    & (candidate_properties['price_egp'] <= budget_hi)
                 ]
             except Exception:
                 pass
         elif query.get('price_max'):
             try:
                 maximum_budget = float(query['price_max'])
-                budget_lower_bound = maximum_budget * 0.90
-                budget_upper_bound = maximum_budget * 1.10
-                candidate_properties = candidate_properties[(candidate_properties['price_egp'] >= budget_lower_bound) & (candidate_properties['price_egp'] <= budget_upper_bound)]
+                candidate_properties = candidate_properties[candidate_properties['price_egp'] <= maximum_budget]
             except Exception:
                 pass
             
@@ -400,7 +422,7 @@ class QueryAdapter:
         candidate_embeddings = training_embeddings[candidate_embedding_indices]
         
         inference_features, _ = FeatureEngine.build_feature_stack(
-            query_row, candidate_properties, candidate_embeddings, query_embedding[0], loaded_models["listing_feature_store"]
+            query_row, candidate_properties, candidate_embeddings, query_embedding_vector, loaded_models["listing_feature_store"]
         )
         relevance_predictions = loaded_models["xgboost_ranker"].predict(inference_features)
         
@@ -441,7 +463,12 @@ class QueryAdapter:
     @staticmethod
     def _format_output(candidates, is_vague: bool = False, message: str = "") -> dict:
         """Formats the dataframe to the JSON Data Contract structure."""
-        export_columns = ['listing_id', 'price_egp', 'area_value', 'price_sqft', 'town', 'district', 'subdistrict', 'completion_status', 'payment_method', 'bedrooms', 'relevance_score']
+        export_columns = [
+            'listing_id', 'title', 'category', 'property_type', 'price_egp',
+            'area_value', 'price_sqft', 'city', 'town', 'district', 'subdistrict',
+            'completion_status', 'payment_method', 'bedrooms', 'bathrooms',
+            'relevance_score'
+        ]
         
         if len(candidates) > 0:
             available_columns = [col for col in export_columns if col in candidates.columns]

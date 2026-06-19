@@ -727,6 +727,8 @@ img { display: block; }
   .messages-area { padding: 16px; }
   .input-area { padding: 12px 16px; }
   .message-row { max-width: 92%; }
+  .property-cards-container { max-width: 92%; }
+  .property-story-row { max-width: 92%; }
 }
 
 /* =============================================
@@ -826,12 +828,11 @@ img { display: block; }
 .property-card {
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  border-radius: 8px;
+  overflow: hidden;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 12px;
   transition: transform var(--transition), box-shadow var(--transition);
 }
 
@@ -845,19 +846,42 @@ img { display: block; }
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 14px 16px 4px;
+}
+
+.property-card-media {
+  width: 100%;
+  aspect-ratio: 2.35 / 1;
+  max-height: 150px;
+  background: var(--gray-bg);
+  overflow: hidden;
+}
+
+.property-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .property-card-price {
   font-size: 18px;
   font-weight: 800;
   color: var(--navy);
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .property-card-title {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.property-card-meta,
+.property-card-location {
+  font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.35;
 }
 
 .property-card-reasoning {
@@ -881,11 +905,53 @@ img { display: block; }
   font-weight: 600;
   transition: background var(--transition);
   text-align: center;
+  margin: 8px 16px 16px;
 }
 
 .property-card-btn:hover {
   background: var(--blue);
   color: white;
+}
+
+.property-story-row {
+  max-width: 82%;
+}
+
+.property-story-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.property-story-intro {
+  font-weight: 500;
+}
+
+.property-story-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.property-story-item:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.property-story-text {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.property-story-bubble .property-card {
+  max-width: 520px;
+  box-shadow: none;
+}
+
+.property-story-bubble .property-card-media {
+  max-height: 135px;
 }
 
 /* =============================================
@@ -927,4 +993,3 @@ textarea:disabled {
   cursor: not-allowed;
   background: var(--gray-bg);
 }
-

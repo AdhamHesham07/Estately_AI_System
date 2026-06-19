@@ -223,7 +223,12 @@ def translator_node(current_state: AgentState) -> Dict[str, Any]:
             "active_model": actual_model_used,
             "response_plan": {
                 "answer_first": final_narrative_text.split("\n")[0] if final_narrative_text else "",
-                "evidence_block": [{"type": "analysis_report"}],
+                "evidence_block": [
+                    prop
+                    for sample in (tool_execution_results.get("comparison_samples") or [])
+                    for prop in (sample.get("candidates") or [])[:2]
+                    if isinstance(prop, dict) and prop.get("listing_id")
+                ],
                 "next_step_prompt": "Offer to search for properties based on this analysis."
             }
         }

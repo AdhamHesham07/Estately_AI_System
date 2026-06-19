@@ -14,7 +14,6 @@ langchain==1.3.1                  # Core LangChain primitives
 litellm==1.83.7                   # Unified LLM gateway (Groq, Gemini, OpenAI)
 python-dotenv==1.0.1              # .env file loading
 rapidfuzz==3.14.5                 # Fuzzy location matching (resolve_location)
-pyodbc==5.3.0                     # SQL Server connectivity (BookingEngine)
 
 # ──────────────────────────────────────────────
 # GUI / API  (agent_gui.py, 5.APIs)
@@ -41,6 +40,7 @@ joblib==1.5.3                     # Cache serialization (stage1_data.joblib, sta
 scipy==1.17.1                     # stats.percentileofscore (FairPriceEstimator)
 langchain-community==0.4.1        # FAISS vector store (KnowledgeEngine RAG)
 langchain-huggingface==1.2.2      # HuggingFaceEndpointEmbeddings (KnowledgeEngine)
+cachetools==5.3.3                 # TTLCache for LLM caching
 
 # ──────────────────────────────────────────────
 # DATA LAYER  (4.Data)
