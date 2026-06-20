@@ -21,6 +21,7 @@ rapidfuzz==3.14.5                 # Fuzzy location matching (resolve_location)
 gradio==6.13.0                    # Gradio chatbot UI (agent_gui.py)
 fastapi==0.136.1                  # REST API server (5.APIs/main.py)
 uvicorn==0.46.0                   # ASGI server for FastAPI
+pydantic==2.13.4                  # Schema definitions (5.APIs/schemas.py)
 
 # ──────────────────────────────────────────────
 # RECOMMENDER  (2.Recommender)
@@ -46,6 +47,7 @@ cachetools==5.3.3                 # TTLCache for LLM caching
 # DATA LAYER  (4.Data)
 # ──────────────────────────────────────────────
 SQLAlchemy==2.0.49                # SQLite engine for DatabaseConnector / DBAdapter
+requests==2.34.2                  # HTTP requests for knowledge loader
 
 # ──────────────────────────────────────────────
 # OPTIONAL / INDIRECT DEPENDENCIES
